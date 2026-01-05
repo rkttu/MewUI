@@ -1,0 +1,460 @@
+using System.Runtime.InteropServices;
+
+using Aprillz.MewUI.Controls;
+using Aprillz.MewUI.Core;
+using Aprillz.MewUI.Elements;
+using Aprillz.MewUI.Input;
+using Aprillz.MewUI.Native;
+using Aprillz.MewUI.Native.Constants;
+using Aprillz.MewUI.Native.Structs;
+using Aprillz.MewUI.Primitives;
+
+namespace Aprillz.MewUI.Platform.Win32;
+
+internal sealed class Win32WindowBackend : IWindowBackend
+{
+    private readonly Win32PlatformHost _host;
+    internal Window Window { get; }
+
+    private UIElement? _mouseOverElement;
+    private UIElement? _capturedElement;
+
+    public nint Handle { get; private set; }
+
+    internal Win32WindowBackend(Win32PlatformHost host, Window window)
+    {
+        _host = host;
+        Window = window;
+    }
+
+    public void Show()
+    {
+        if (Handle != 0)
+        {
+            User32.ShowWindow(Handle, ShowWindowCommands.SW_SHOW);
+            return;
+        }
+
+        CreateWindow();
+        User32.ShowWindow(Handle, ShowWindowCommands.SW_SHOW);
+        User32.UpdateWindow(Handle);
+    }
+
+    public void Hide()
+    {
+        if (Handle != 0)
+            User32.ShowWindow(Handle, ShowWindowCommands.SW_HIDE);
+    }
+
+    public void Close()
+    {
+        if (Handle != 0)
+            User32.DestroyWindow(Handle);
+    }
+
+    public void Invalidate(bool erase)
+    {
+        if (Handle != 0)
+            User32.InvalidateRect(Handle, 0, erase);
+    }
+
+    public void SetTitle(string title)
+    {
+        if (Handle != 0)
+            User32.SetWindowText(Handle, title);
+    }
+
+    public void SetClientSize(double widthDip, double heightDip)
+    {
+        if (Handle == 0)
+            return;
+
+        uint dpi = Window.Dpi == 0 ? User32.GetDpiForWindow(Handle) : Window.Dpi;
+        double dpiScale = dpi / 96.0;
+
+        var rect = new RECT(0, 0, (int)Math.Round(widthDip * dpiScale), (int)Math.Round(heightDip * dpiScale));
+        User32.AdjustWindowRectEx(ref rect, WindowStyles.WS_OVERLAPPEDWINDOW, false, 0);
+        User32.SetWindowPos(Handle, 0, 0, 0, rect.Width, rect.Height, 0x0002 | 0x0004); // SWP_NOMOVE | SWP_NOZORDER
+    }
+
+    public void CaptureMouse(UIElement element)
+    {
+        if (Handle == 0)
+            return;
+
+        User32.SetCapture(Handle);
+        _capturedElement = element;
+        element.SetMouseCaptured(true);
+    }
+
+    public void ReleaseMouseCapture()
+    {
+        User32.ReleaseCapture();
+        if (_capturedElement != null)
+        {
+            _capturedElement.SetMouseCaptured(false);
+            _capturedElement = null;
+        }
+    }
+
+    public nint ProcessMessage(uint msg, nint wParam, nint lParam)
+    {
+        switch (msg)
+        {
+            case WindowMessages.WM_NCCREATE:
+                return User32.DefWindowProc(Handle, msg, wParam, lParam);
+
+            case WindowMessages.WM_CREATE:
+                return 0;
+
+            case WindowMessages.WM_DESTROY:
+                HandleDestroy();
+                return 0;
+
+            case WindowMessages.WM_CLOSE:
+                Window.RaiseClosed();
+                User32.DestroyWindow(Handle);
+                return 0;
+
+            case WindowMessages.WM_PAINT:
+                return HandlePaint();
+
+            case WindowMessages.WM_ERASEBKGND:
+                return 1;
+
+            case WindowMessages.WM_SIZE:
+                return HandleSize(lParam);
+
+            case WindowMessages.WM_DPICHANGED:
+                return HandleDpiChanged(wParam, lParam);
+
+            case WindowMessages.WM_ACTIVATE:
+                return HandleActivate(wParam);
+
+            case WindowMessages.WM_LBUTTONDOWN:
+                return HandleMouseButton(lParam, MouseButton.Left, isDown: true);
+            case WindowMessages.WM_LBUTTONUP:
+                return HandleMouseButton(lParam, MouseButton.Left, isDown: false);
+            case WindowMessages.WM_RBUTTONDOWN:
+                return HandleMouseButton(lParam, MouseButton.Right, isDown: true);
+            case WindowMessages.WM_RBUTTONUP:
+                return HandleMouseButton(lParam, MouseButton.Right, isDown: false);
+            case WindowMessages.WM_MBUTTONDOWN:
+                return HandleMouseButton(lParam, MouseButton.Middle, isDown: true);
+            case WindowMessages.WM_MBUTTONUP:
+                return HandleMouseButton(lParam, MouseButton.Middle, isDown: false);
+
+            case WindowMessages.WM_MOUSEMOVE:
+                return HandleMouseMove(lParam);
+            case WindowMessages.WM_MOUSELEAVE:
+                return HandleMouseLeave();
+
+            case WindowMessages.WM_MOUSEWHEEL:
+                return HandleMouseWheel(wParam, lParam, isHorizontal: false);
+            case WindowMessages.WM_MOUSEHWHEEL:
+                return HandleMouseWheel(wParam, lParam, isHorizontal: true);
+
+            case WindowMessages.WM_KEYDOWN:
+            case WindowMessages.WM_SYSKEYDOWN:
+                return HandleKeyDown(wParam, lParam);
+            case WindowMessages.WM_KEYUP:
+            case WindowMessages.WM_SYSKEYUP:
+                return HandleKeyUp(wParam, lParam);
+
+            case WindowMessages.WM_CHAR:
+                return HandleChar(wParam);
+
+            case WindowMessages.WM_SETFOCUS:
+                User32.CreateCaret(Handle, 0, 1, 20);
+                return 0;
+
+            case WindowMessages.WM_KILLFOCUS:
+                User32.DestroyCaret();
+                return 0;
+
+            case Win32UiDispatcher.WM_INVOKE:
+                (Window.ApplicationDispatcher as Win32UiDispatcher)?.ProcessWorkItems();
+                return 0;
+
+            default:
+                return User32.DefWindowProc(Handle, msg, wParam, lParam);
+        }
+    }
+
+    private void CreateWindow()
+    {
+        uint initialDpi = User32.GetDpiForSystem();
+        Window.SetDpi(initialDpi);
+        double dpiScale = Window.DpiScale;
+
+        var rect = new RECT(0, 0, (int)(Window.Width * dpiScale), (int)(Window.Height * dpiScale));
+        User32.AdjustWindowRectEx(ref rect, WindowStyles.WS_OVERLAPPEDWINDOW, false, 0);
+
+        Handle = User32.CreateWindowEx(
+            0,
+            Win32PlatformHost.WindowClassName,
+            Window.Title,
+            WindowStyles.WS_OVERLAPPEDWINDOW,
+            100,
+            100,
+            rect.Width,
+            rect.Height,
+            0,
+            0,
+            Kernel32.GetModuleHandle(null),
+            0);
+
+        if (Handle == 0)
+            throw new InvalidOperationException($"Failed to create window. Error: {Marshal.GetLastWin32Error()}");
+
+        _host.RegisterWindow(Handle, this);
+        Window.AttachBackend(this);
+
+        uint actualDpi = User32.GetDpiForWindow(Handle);
+        if (actualDpi != initialDpi)
+        {
+            var oldDpi = initialDpi;
+            Window.SetDpi(actualDpi);
+            Window.RaiseDpiChanged(oldDpi, actualDpi);
+            SetClientSize(Window.Width, Window.Height);
+        }
+
+        User32.GetClientRect(Handle, out var clientRect);
+        Window.SetClientSizeDip(clientRect.Width / Window.DpiScale, clientRect.Height / Window.DpiScale);
+
+        if (Window.Background.A == 0)
+            Window.Background = Window.Theme.WindowBackground;
+
+        Window.RaiseLoaded();
+    }
+
+    private void HandleDestroy()
+    {
+        _host.UnregisterWindow(Handle);
+        Window.DisposeVisualTree();
+        Handle = 0;
+    }
+
+    private nint HandlePaint()
+    {
+        Window.PerformLayout();
+
+        var ps = new PAINTSTRUCT();
+        nint hdc = User32.BeginPaint(Handle, out ps);
+
+        try
+        {
+            Window.RenderFrame(hdc);
+        }
+        finally
+        {
+            User32.EndPaint(Handle, ref ps);
+        }
+
+        return 0;
+    }
+
+    private nint HandleSize(nint lParam)
+    {
+        int widthPx = (short)(lParam.ToInt64() & 0xFFFF);
+        int heightPx = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
+
+        Window.SetClientSizeDip(widthPx / Window.DpiScale, heightPx / Window.DpiScale);
+        Window.PerformLayout();
+        Window.Invalidate();
+
+        Window.RaiseSizeChanged(widthPx / Window.DpiScale, heightPx / Window.DpiScale);
+        return 0;
+    }
+
+    private nint HandleDpiChanged(nint wParam, nint lParam)
+    {
+        uint newDpi = (uint)(wParam.ToInt64() & 0xFFFF);
+        uint oldDpi = Window.Dpi;
+        Window.SetDpi(newDpi);
+
+        var suggestedRect = Marshal.PtrToStructure<RECT>(lParam);
+        User32.SetWindowPos(Handle, 0,
+            suggestedRect.left, suggestedRect.top,
+            suggestedRect.Width, suggestedRect.Height,
+            0x0004 | 0x0010); // SWP_NOZORDER | SWP_NOACTIVATE
+
+        Window.RaiseDpiChanged(oldDpi, newDpi);
+        Window.PerformLayout();
+        Window.Invalidate();
+
+        return 0;
+    }
+
+    private nint HandleActivate(nint wParam)
+    {
+        bool active = (wParam.ToInt64() & 0xFFFF) != 0;
+        Window.SetIsActive(active);
+        if (active)
+            Window.Activated?.Invoke();
+        else
+            Window.Deactivated?.Invoke();
+        return 0;
+    }
+
+    private nint HandleMouseMove(nint lParam)
+    {
+        var pos = GetMousePosition(lParam);
+        var screenPos = ClientToScreen(pos);
+
+        var element = _capturedElement ?? Window.HitTest(pos);
+
+        if (element != _mouseOverElement)
+        {
+            _mouseOverElement?.SetMouseOver(false);
+            element?.SetMouseOver(true);
+            _mouseOverElement = element;
+        }
+
+        bool leftDown = (User32.GetKeyState(VirtualKeys.VK_LBUTTON) & 0x8000) != 0;
+        bool rightDown = (User32.GetKeyState(VirtualKeys.VK_RBUTTON) & 0x8000) != 0;
+        bool middleDown = (User32.GetKeyState(VirtualKeys.VK_MBUTTON) & 0x8000) != 0;
+        var args = new MouseEventArgs(pos, screenPos, MouseButton.Left, leftDown, rightDown, middleDown);
+        element?.OnMouseMove(args);
+
+        return 0;
+    }
+
+    private nint HandleMouseButton(nint lParam, MouseButton button, bool isDown)
+    {
+        var pos = GetMousePosition(lParam);
+        var screenPos = ClientToScreen(pos);
+
+        Window.ClosePopupsIfClickOutside(pos);
+
+        var element = _capturedElement ?? Window.HitTest(pos);
+
+        var args = new MouseEventArgs(pos, screenPos, button,
+            button == MouseButton.Left && isDown,
+            button == MouseButton.Right && isDown,
+            button == MouseButton.Middle && isDown);
+
+        if (isDown)
+        {
+            if (element?.Focusable == true)
+                Window.FocusManager.SetFocus(element);
+
+            element?.OnMouseDown(args);
+        }
+        else
+        {
+            element?.OnMouseUp(args);
+        }
+
+        return 0;
+    }
+
+    private nint HandleMouseWheel(nint wParam, nint lParam, bool isHorizontal)
+    {
+        int delta = (short)((wParam.ToInt64() >> 16) & 0xFFFF);
+
+        var screenX = (short)(lParam.ToInt64() & 0xFFFF);
+        var screenY = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
+        var pt = new POINT(screenX, screenY);
+        User32.ScreenToClient(Handle, ref pt);
+        var pos = new Point(pt.x / Window.DpiScale, pt.y / Window.DpiScale);
+
+        var element = Window.HitTest(pos);
+        var args = new MouseWheelEventArgs(pos, new Point(screenX, screenY), delta, isHorizontal);
+        element?.OnMouseWheel(args);
+
+        return 0;
+    }
+
+    private nint HandleMouseLeave()
+    {
+        if (_mouseOverElement != null)
+        {
+            _mouseOverElement.SetMouseOver(false);
+            _mouseOverElement = null;
+        }
+        return 0;
+    }
+
+    private ModifierKeys GetModifierKeys()
+    {
+        var modifiers = ModifierKeys.None;
+
+        if ((User32.GetKeyState(VirtualKeys.VK_CONTROL) & 0x8000) != 0)
+            modifiers |= ModifierKeys.Control;
+        if ((User32.GetKeyState(VirtualKeys.VK_SHIFT) & 0x8000) != 0)
+            modifiers |= ModifierKeys.Shift;
+        if ((User32.GetKeyState(VirtualKeys.VK_MENU) & 0x8000) != 0)
+            modifiers |= ModifierKeys.Alt;
+
+        return modifiers;
+    }
+
+    private nint HandleKeyDown(nint wParam, nint lParam)
+    {
+        int key = (int)wParam.ToInt64();
+        bool isRepeat = ((lParam.ToInt64() >> 30) & 1) != 0;
+        var modifiers = GetModifierKeys();
+
+        if (key == VirtualKeys.VK_TAB)
+        {
+            if (modifiers.HasFlag(ModifierKeys.Shift))
+                Window.FocusManager.MoveFocusPrevious();
+            else
+                Window.FocusManager.MoveFocusNext();
+            return 0;
+        }
+
+        var args = new KeyEventArgs(key, modifiers, isRepeat);
+        Window.FocusManager.FocusedElement?.OnKeyDown(args);
+
+        return args.Handled ? 0 : User32.DefWindowProc(Handle, WindowMessages.WM_KEYDOWN, wParam, lParam);
+    }
+
+    private nint HandleKeyUp(nint wParam, nint lParam)
+    {
+        int key = (int)wParam.ToInt64();
+        var modifiers = GetModifierKeys();
+
+        var args = new KeyEventArgs(key, modifiers);
+        Window.FocusManager.FocusedElement?.OnKeyUp(args);
+
+        return args.Handled ? 0 : User32.DefWindowProc(Handle, WindowMessages.WM_KEYUP, wParam, lParam);
+    }
+
+    private nint HandleChar(nint wParam)
+    {
+        char c = (char)wParam.ToInt64();
+        if (c == '\b')
+            return 0;
+
+        if (char.IsControl(c) && c != '\r' && c != '\t')
+            return 0;
+
+        var args = new TextInputEventArgs(c.ToString());
+        Window.FocusManager.FocusedElement?.OnTextInput(args);
+
+        return 0;
+    }
+
+    private Point GetMousePosition(nint lParam)
+    {
+        int x = (short)(lParam.ToInt64() & 0xFFFF);
+        int y = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
+        // lParam is in device pixels; convert to DIPs.
+        return new Point(x / Window.DpiScale, y / Window.DpiScale);
+    }
+
+    private Point ClientToScreen(Point clientPoint)
+    {
+        var pt = new POINT((int)(clientPoint.X * Window.DpiScale), (int)(clientPoint.Y * Window.DpiScale));
+        User32.ClientToScreen(Handle, ref pt);
+        return new Point(pt.x, pt.y);
+    }
+
+    public void Dispose()
+    {
+        if (Handle != 0)
+            Close();
+    }
+}

@@ -1,0 +1,148 @@
+using Aprillz.MewUI.Controls;
+using Aprillz.MewUI.Elements;
+using Aprillz.MewUI.Primitives;
+using Aprillz.MewUI.Rendering;
+
+namespace Aprillz.MewUI.Panels;
+
+/// <summary>
+/// Base class for layout panels that contain multiple children.
+/// </summary>
+public abstract class Panel : Control
+{
+    private readonly List<Element> _children = new();
+
+    /// <summary>
+    /// Gets the collection of child elements.
+    /// </summary>
+    public IReadOnlyList<Element> Children => _children;
+
+    /// <summary>
+    /// Adds a child element to the panel.
+    /// </summary>
+    public void Add(Element child)
+    {
+        if (child == null) throw new ArgumentNullException(nameof(child));
+
+        child.Parent = this;
+        _children.Add(child);
+        OnChildAdded(child);
+        InvalidateMeasure();
+    }
+
+    /// <summary>
+    /// Adds multiple children to the panel.
+    /// </summary>
+    public void AddRange(params Element[] children)
+    {
+        foreach (var child in children)
+            Add(child);
+    }
+
+    /// <summary>
+    /// Removes a child element from the panel.
+    /// </summary>
+    public bool Remove(Element child)
+    {
+        if (_children.Remove(child))
+        {
+            child.Parent = null;
+            OnChildRemoved(child);
+            InvalidateMeasure();
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Removes all children from the panel.
+    /// </summary>
+    public void Clear()
+    {
+        foreach (var child in _children)
+        {
+            child.Parent = null;
+            OnChildRemoved(child);
+        }
+        _children.Clear();
+        InvalidateMeasure();
+    }
+
+    /// <summary>
+    /// Gets the child at the specified index.
+    /// </summary>
+    public Element this[int index] => _children[index];
+
+    /// <summary>
+    /// Gets the number of children.
+    /// </summary>
+    public int Count => _children.Count;
+
+    /// <summary>
+    /// Inserts a child at the specified index.
+    /// </summary>
+    public void Insert(int index, Element child)
+    {
+        if (child == null) throw new ArgumentNullException(nameof(child));
+
+        child.Parent = this;
+        _children.Insert(index, child);
+        OnChildAdded(child);
+        InvalidateMeasure();
+    }
+
+    /// <summary>
+    /// Removes the child at the specified index.
+    /// </summary>
+    public void RemoveAt(int index)
+    {
+        var child = _children[index];
+        _children.RemoveAt(index);
+        child.Parent = null;
+        OnChildRemoved(child);
+        InvalidateMeasure();
+    }
+
+    /// <summary>
+    /// Called when a child is added.
+    /// </summary>
+    protected virtual void OnChildAdded(Element child) { }
+
+    /// <summary>
+    /// Called when a child is removed.
+    /// </summary>
+    protected virtual void OnChildRemoved(Element child) { }
+
+    public override void Render(IGraphicsContext context)
+    {
+        base.Render(context);
+
+        foreach (var child in _children)
+        {
+            child.Render(context);
+        }
+    }
+
+    public override UIElement? HitTest(Point point)
+    {
+        if (!IsVisible || !IsHitTestVisible)
+            return null;
+
+        // Hit test children in reverse order (top to bottom in visual order)
+        for (int i = _children.Count - 1; i >= 0; i--)
+        {
+            if (_children[i] is UIElement uiChild)
+            {
+                var result = uiChild.HitTest(point);
+                if (result != null)
+                    return result;
+            }
+        }
+
+        // Then check self
+        if (Bounds.Contains(point))
+            return this;
+
+        return null;
+    }
+}

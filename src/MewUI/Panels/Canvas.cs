@@ -1,0 +1,95 @@
+using Aprillz.MewUI.Elements;
+using Aprillz.MewUI.Primitives;
+
+namespace Aprillz.MewUI.Panels;
+
+/// <summary>
+/// A panel that positions children using absolute coordinates.
+/// </summary>
+public class Canvas : Panel
+{
+    // Attached properties storage (AOT-compatible)
+    private static readonly Dictionary<Element, double> _leftProperty = new();
+    private static readonly Dictionary<Element, double> _topProperty = new();
+    private static readonly Dictionary<Element, double> _rightProperty = new();
+    private static readonly Dictionary<Element, double> _bottomProperty = new();
+
+    #region Attached Properties
+
+    public static void SetLeft(Element element, double value) => _leftProperty[element] = value;
+    public static double GetLeft(Element element) => _leftProperty.GetValueOrDefault(element, double.NaN);
+
+    public static void SetTop(Element element, double value) => _topProperty[element] = value;
+    public static double GetTop(Element element) => _topProperty.GetValueOrDefault(element, double.NaN);
+
+    public static void SetRight(Element element, double value) => _rightProperty[element] = value;
+    public static double GetRight(Element element) => _rightProperty.GetValueOrDefault(element, double.NaN);
+
+    public static void SetBottom(Element element, double value) => _bottomProperty[element] = value;
+    public static double GetBottom(Element element) => _bottomProperty.GetValueOrDefault(element, double.NaN);
+
+    #endregion
+
+    protected override void OnChildRemoved(Element child)
+    {
+        // Clean up attached properties
+        _leftProperty.Remove(child);
+        _topProperty.Remove(child);
+        _rightProperty.Remove(child);
+        _bottomProperty.Remove(child);
+    }
+
+    protected override Size MeasureContent(Size availableSize)
+    {
+        // Canvas measures children with infinite space
+        foreach (var child in Children)
+        {
+            child.Measure(Size.Infinity);
+        }
+
+        // Canvas doesn't have a natural size - it takes available space
+        return Size.Empty;
+    }
+
+    protected override void ArrangeContent(Rect bounds)
+    {
+        foreach (var child in Children)
+        {
+            double x = bounds.X;
+            double y = bounds.Y;
+            double width = child.DesiredSize.Width;
+            double height = child.DesiredSize.Height;
+
+            double left = GetLeft(child);
+            double top = GetTop(child);
+            double right = GetRight(child);
+            double bottom = GetBottom(child);
+
+            // Position from left or right
+            if (!double.IsNaN(left))
+            {
+                x = bounds.X + left;
+                if (!double.IsNaN(right))
+                    width = bounds.Width - left - right;
+            }
+            else if (!double.IsNaN(right))
+            {
+                x = bounds.Right - right - width;
+            }
+
+            // Position from top or bottom
+            if (!double.IsNaN(top))
+            {
+                y = bounds.Y + top;
+                if (!double.IsNaN(bottom))
+                    height = bounds.Height - top - bottom;
+            }
+            else if (!double.IsNaN(bottom))
+            {
+                y = bounds.Bottom - bottom - height;
+            }
+
+            child.Arrange(new Rect(x, y, width, height));
+        }
+    }
+}

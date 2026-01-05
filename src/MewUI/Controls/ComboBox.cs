@@ -1,0 +1,475 @@
+using Aprillz.MewUI.Binding;
+using Aprillz.MewUI.Core;
+using Aprillz.MewUI.Elements;
+using Aprillz.MewUI.Input;
+using Aprillz.MewUI.Primitives;
+using Aprillz.MewUI.Rendering;
+
+namespace Aprillz.MewUI.Controls;
+
+public sealed class ComboBox : Control, IDisposable, IPopupOwner
+{
+    private readonly List<string> _items = new();
+    private bool _isDropDownOpen;
+    private ListBox? _popupList;
+    private ValueBinding<int>? _selectedIndexBinding;
+    private bool _updatingFromSource;
+    private bool _disposed;
+
+    public IList<string> Items => _items;
+
+    public int SelectedIndex
+    {
+        get;
+        set
+        {
+            int clamped = value;
+            if (_items.Count == 0)
+                clamped = -1;
+            else
+                clamped = Math.Clamp(value, -1, _items.Count - 1);
+
+            if (field == clamped)
+                return;
+
+            field = clamped;
+            SelectionChanged?.Invoke(field);
+            InvalidateVisual();
+        }
+    } = -1;
+
+    public string? SelectedItem => SelectedIndex >= 0 && SelectedIndex < _items.Count ? _items[SelectedIndex] : null;
+
+    public string Placeholder
+    {
+        get;
+        set { field = value ?? string.Empty; InvalidateVisual(); }
+    } = string.Empty;
+
+    public double ItemHeight
+    {
+        get;
+        set { field = value; InvalidateMeasure(); }
+    } = double.NaN;
+
+    public double MaxDropDownHeight
+    {
+        get;
+        set { field = value; InvalidateMeasure(); }
+    } = 160;
+
+    public bool IsDropDownOpen
+    {
+        get => _isDropDownOpen;
+        set
+        {
+            if (_isDropDownOpen == value)
+                return;
+
+            _isDropDownOpen = value;
+            if (_isDropDownOpen)
+                ShowPopup();
+            else
+                ClosePopup();
+
+            InvalidateVisual();
+        }
+    }
+
+    public Action<int>? SelectionChanged { get; set; }
+
+    public override bool Focusable => true;
+
+    public ComboBox()
+    {
+        var theme = Theme.Current;
+        Background = theme.ControlBackground;
+        BorderBrush = theme.ControlBorder;
+        BorderThickness = 1;
+        Padding = new Thickness(8, 4, 8, 4);
+        // Do not set explicit Height, otherwise FrameworkElement.MeasureOverride will clamp DesiredSize
+        // and the drop-down cannot expand. Use MinHeight as the default header height.
+        Height = double.NaN;
+        MinHeight = 28;
+    }
+
+    protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
+    {
+        if (Background == oldTheme.ControlBackground)
+            Background = newTheme.ControlBackground;
+        if (BorderBrush == oldTheme.ControlBorder)
+            BorderBrush = newTheme.ControlBorder;
+        base.OnThemeChanged(oldTheme, newTheme);
+    }
+
+    protected override Size MeasureContent(Size availableSize)
+    {
+        var headerHeight = ResolveHeaderHeight();
+        double width = 80;
+
+        using (var measure = BeginTextMeasurement())
+        {
+            double maxWidth = 0;
+            foreach (var item in _items)
+            {
+                if (string.IsNullOrEmpty(item))
+                    continue;
+
+                maxWidth = Math.Max(maxWidth, measure.Context.MeasureText(item, measure.Font).Width);
+            }
+
+            if (!string.IsNullOrEmpty(Placeholder))
+                maxWidth = Math.Max(maxWidth, measure.Context.MeasureText(Placeholder, measure.Font).Width);
+
+            width = maxWidth + Padding.HorizontalThickness + ArrowAreaWidth;
+        }
+
+        return new Size(width, headerHeight);
+    }
+
+    protected override void OnRender(IGraphicsContext context)
+    {
+        var theme = GetTheme();
+        var bounds = Bounds;
+        double radius = theme.ControlCornerRadius;
+
+        var bg = IsEnabled ? Background : theme.TextBoxDisabledBackground;
+
+        if (radius > 0)
+            context.FillRoundedRectangle(bounds, radius, radius, bg);
+        else
+            context.FillRectangle(bounds, bg);
+
+        var borderColor = BorderBrush;
+        if (IsEnabled)
+        {
+            if (IsFocused)
+                borderColor = theme.Accent;
+            else if (IsMouseOver)
+                borderColor = BorderBrush.Lerp(theme.Accent, 0.6);
+        }
+
+        if (BorderThickness > 0)
+        {
+            if (radius > 0)
+                context.DrawRoundedRectangle(bounds, radius, radius, borderColor, BorderThickness);
+            else
+                context.DrawRectangle(bounds, borderColor, BorderThickness);
+        }
+
+        var headerHeight = ResolveHeaderHeight();
+        var headerRect = new Rect(bounds.X, bounds.Y, bounds.Width, headerHeight);
+
+        // Text
+        var textRect = new Rect(headerRect.X, headerRect.Y, headerRect.Width - ArrowAreaWidth, headerRect.Height)
+            .Deflate(Padding);
+
+        string text = SelectedItem ?? string.Empty;
+        var textColor = IsEnabled ? Foreground : theme.DisabledText;
+        if (string.IsNullOrEmpty(text) && !string.IsNullOrEmpty(Placeholder) && !IsFocused)
+        {
+            text = Placeholder;
+            textColor = theme.PlaceholderText;
+        }
+
+        if (!string.IsNullOrEmpty(text))
+            context.DrawText(text, textRect, GetFont(), textColor, TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
+
+        // Arrow
+        DrawArrow(context, headerRect, IsEnabled ? textColor : theme.DisabledText, isUp: IsDropDownOpen);
+
+        if (IsDropDownOpen)
+            UpdatePopupBounds();
+    }
+
+    protected override void OnLostFocus()
+    {
+        base.OnLostFocus();
+        if (!IsDropDownOpen)
+            return;
+
+        var root = FindVisualRoot();
+        if (root is not Window window)
+        {
+            IsDropDownOpen = false;
+            return;
+        }
+
+        if (_popupList != null && ReferenceEquals(window.FocusManager.FocusedElement, _popupList))
+            return;
+
+        IsDropDownOpen = false;
+    }
+
+    internal override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+
+        if (!IsEnabled || e.Button != MouseButton.Left)
+            return;
+
+        Focus();
+
+        var bounds = Bounds;
+        double headerHeight = ResolveHeaderHeight();
+        var headerRect = new Rect(bounds.X, bounds.Y, bounds.Width, headerHeight);
+
+        if (headerRect.Contains(e.Position))
+        {
+            IsDropDownOpen = !IsDropDownOpen;
+            e.Handled = true;
+            return;
+        }
+    }
+
+    internal override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+
+        if (!IsEnabled)
+            return;
+
+        if (e.Key == Native.Constants.VirtualKeys.VK_SPACE || e.Key == Native.Constants.VirtualKeys.VK_RETURN)
+        {
+            IsDropDownOpen = !IsDropDownOpen;
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Native.Constants.VirtualKeys.VK_ESCAPE && IsDropDownOpen)
+        {
+            IsDropDownOpen = false;
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Native.Constants.VirtualKeys.VK_DOWN)
+        {
+            if (!IsDropDownOpen)
+                IsDropDownOpen = true;
+
+            if (_items.Count > 0)
+                SelectedIndex = Math.Min(_items.Count - 1, SelectedIndex < 0 ? 0 : SelectedIndex + 1);
+
+            if (_popupList != null)
+                _popupList.SelectedIndex = SelectedIndex;
+
+            e.Handled = true;
+        }
+        else if (e.Key == Native.Constants.VirtualKeys.VK_UP)
+        {
+            if (!IsDropDownOpen)
+                IsDropDownOpen = true;
+
+            if (_items.Count > 0)
+                SelectedIndex = Math.Max(0, SelectedIndex <= 0 ? 0 : SelectedIndex - 1);
+
+            if (_popupList != null)
+                _popupList.SelectedIndex = SelectedIndex;
+
+            e.Handled = true;
+        }
+    }
+
+    public void AddItem(string item)
+    {
+        _items.Add(item ?? string.Empty);
+        InvalidateMeasure();
+        InvalidateVisual();
+    }
+
+    public void ClearItems()
+    {
+        _items.Clear();
+        SelectedIndex = -1;
+        IsDropDownOpen = false;
+        InvalidateMeasure();
+        InvalidateVisual();
+    }
+
+    public ComboBox BindSelectedIndex(ObservableValue<int> source)
+    {
+        if (source == null) throw new ArgumentNullException(nameof(source));
+
+        _selectedIndexBinding?.Dispose();
+        _selectedIndexBinding = new ValueBinding<int>(
+            get: () => source.Value,
+            set: v => source.Value = v,
+            subscribe: h => source.Changed += h,
+            unsubscribe: h => source.Changed -= h,
+            onSourceChanged: () =>
+            {
+                _updatingFromSource = true;
+                try { SelectedIndex = source.Value; }
+                finally { _updatingFromSource = false; }
+            });
+
+        var existing = SelectionChanged;
+        SelectionChanged = i =>
+        {
+            existing?.Invoke(i);
+
+            if (_updatingFromSource)
+                return;
+
+            _selectedIndexBinding?.Set(i);
+        };
+
+        _updatingFromSource = true;
+        try { SelectedIndex = source.Value; }
+        finally { _updatingFromSource = false; }
+
+        return this;
+    }
+
+    private double ResolveItemHeight()
+    {
+        if (!double.IsNaN(ItemHeight) && ItemHeight > 0)
+            return ItemHeight;
+        return Math.Max(18, FontSize + 6);
+    }
+
+    private double ResolveHeaderHeight()
+    {
+        if (!double.IsNaN(Height) && Height > 0)
+            return Height;
+        var min = MinHeight > 0 ? MinHeight : 0;
+        return Math.Max(Math.Max(24, FontSize + Padding.VerticalThickness + 8), min);
+    }
+
+    private void DrawArrow(IGraphicsContext context, Rect headerRect, Color color)
+        => DrawArrow(context, headerRect, color, isUp: false);
+
+    private void DrawArrow(IGraphicsContext context, Rect headerRect, Color color, bool isUp)
+    {
+        double centerX = headerRect.Right - ArrowAreaWidth / 2;
+        double centerY = headerRect.Y + headerRect.Height / 2;
+
+        double size = 4;
+        var p1 = isUp
+            ? new Point(centerX - size, centerY + size / 2)
+            : new Point(centerX - size, centerY - size / 2);
+        var p2 = new Point(centerX, isUp ? centerY - size / 2 : centerY + size / 2);
+        var p3 = isUp
+            ? new Point(centerX + size, centerY + size / 2)
+            : new Point(centerX + size, centerY - size / 2);
+
+        context.DrawLine(p1, p2, color, 1);
+        context.DrawLine(p2, p3, color, 1);
+    }
+
+    private const double ArrowAreaWidth = 22;
+
+    private void ShowPopup()
+    {
+        var root = FindVisualRoot();
+        if (root is not Window window)
+            return;
+
+        if (_popupList == null)
+        {
+            _popupList = new ListBox();
+            _popupList.Items.Clear();
+            foreach (var item in _items)
+                _popupList.AddItem(item);
+            _popupList.SelectedIndex = SelectedIndex;
+            _popupList.SelectionChanged = i =>
+            {
+                SelectedIndex = i;
+                IsDropDownOpen = false;
+            };
+        }
+        else
+        {
+            // Sync items/selection.
+            _popupList.Items.Clear();
+            foreach (var item in _items)
+                _popupList.AddItem(item);
+            _popupList.SelectedIndex = SelectedIndex;
+        }
+
+        var popupBounds = CalculatePopupBounds(window);
+        window.ShowPopup(this, _popupList, popupBounds);
+        window.FocusManager.SetFocus(_popupList);
+    }
+
+    private void ClosePopup()
+    {
+        var root = FindVisualRoot();
+        if (root is not Window window)
+            return;
+
+        if (_popupList != null)
+            window.ClosePopup(_popupList);
+    }
+
+    private void UpdatePopupBounds()
+    {
+        if (!IsDropDownOpen || _popupList == null)
+            return;
+
+        var root = FindVisualRoot();
+        if (root is not Window window)
+            return;
+
+        var popupBounds = CalculatePopupBounds(window);
+        window.UpdatePopup(_popupList, popupBounds);
+    }
+
+    private Rect CalculatePopupBounds(Window window)
+    {
+        var bounds = Bounds;
+        double width = Math.Max(0, bounds.Width);
+        if (width <= 0)
+            width = 120;
+
+        _popupList!.Measure(new Size(width, double.PositiveInfinity));
+        double desiredHeight = _popupList.DesiredSize.Height;
+        double height = Math.Min(desiredHeight, Math.Max(0, MaxDropDownHeight));
+
+        double x = bounds.X;
+        double belowY = bounds.Bottom;
+        double aboveY = bounds.Y - height;
+
+        var client = window.ClientSizeDip;
+
+        bool fitsBelow = belowY + height <= client.Height;
+        bool fitsAbove = aboveY >= 0;
+
+        double y = fitsBelow || !fitsAbove ? belowY : aboveY;
+
+        // Clamp horizontally to client area.
+        if (x + width > client.Width)
+            x = Math.Max(0, client.Width - width);
+        if (x < 0)
+            x = 0;
+
+        return new Rect(x, y, width, height);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        if (_popupList != null)
+        {
+            ClosePopup();
+            _popupList.Dispose();
+            _popupList = null;
+        }
+
+        _selectedIndexBinding?.Dispose();
+        _selectedIndexBinding = null;
+        _disposed = true;
+    }
+
+    void IPopupOwner.OnPopupClosed(UIElement popup)
+    {
+        if (_popupList != null && ReferenceEquals(popup, _popupList))
+        {
+            _isDropDownOpen = false;
+            InvalidateVisual();
+        }
+    }
+}

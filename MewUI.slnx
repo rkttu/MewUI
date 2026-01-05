@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="samples/MewUI.Sample/MewUI.Sample.csproj" />
+  <Project Path="src/MewUI/MewUI.csproj" />
+</Solution>
