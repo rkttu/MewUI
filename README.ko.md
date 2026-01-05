@@ -8,6 +8,11 @@ NativeAOT + Trim 앱을 목표로 하는, 코드 기반(code-first) .NET GUI 라
 
 **샘플 프로젝트 NativeAOT + Trimmed 빌드 출력:** 단일 exe 약 `2.2 MB`
 
+<img width="620" height="588" alt="image" src="https://github.com/user-attachments/assets/3851bbca-88d0-4a2b-835f-56093244c694" />
+
+<img width="620" height="588" alt="image" src="https://github.com/user-attachments/assets/793b6c01-724e-4684-9236-29e5ad7ed04b" />
+
+
 ## C# 마크업 예시
 
 ```csharp
