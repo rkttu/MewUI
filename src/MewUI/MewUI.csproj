@@ -1,17 +1,31 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net8.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <LangVersion>preview</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
     <!-- Assembly Info -->
     <RootNamespace>Aprillz.MewUI</RootNamespace>
     <AssemblyName>Aprillz.MewUI</AssemblyName>
-    <Version>1.0.0</Version>
+    <Version>0.1.0</Version>
     <Authors>Aprillz</Authors>
     <Description>Aprillz.MewUI - minimal .NET GUI library for Native AOT compilation</Description>
+
+    <!-- NuGet -->
+    <PackageId>Aprillz.MewUI</PackageId>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>logo-256.png</PackageIcon>
+    <PublishRepositoryUrl>false</PublishRepositoryUrl>
+    <IncludeSymbols>false</IncludeSymbols>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\assets\logo\logo-256.png" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
 </Project>

@@ -1,31 +1,35 @@
-![Aprillz.MewUI](logo.png)
+<img src="assets/logo/logo-256.png" alt="Aprillz.MewUI" width="256" height="256" />
 
-# Aprillz.MewUI
 
-![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)
+![.NET](https://img.shields.io/badge/.NET-8%2B-512BD4?logo=dotnet&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-10%2B-0078D4?logo=windows&logoColor=white)
 ![NativeAOT](https://img.shields.io/badge/NativeAOT-Ready-2E7D32)
 ![License: MIT](https://img.shields.io/badge/License-MIT-000000)
 
-Minimal, code-first lightweight .NET GUI library aimed at **NativeAOT + Trim**.
+---
 
-**Status:** 🧪 experimental prototype (APIs and behavior may change).
+**😺 MewUI** is minimal, code-first .NET GUI library aimed at **NativeAOT + Trim**.
 
-**Note:** 🤖 most of the code in this repository is written with the help of GPT.
+- **Status:** 🧪 experimental prototype (APIs and behavior may change).
 
-**Sample project NativeAOT + Trimmed publish output size** (`win-x64-trimmed`): single EXE ~ `2.2 MB`
+- **Note:** 🤖 most of the code in this repository is written with the help of GPT.
+---
+
+## Screenshots
 
 | Light | Dark |
 |---|---|
-| ![Light (screenshot)](light.png) | ![Dark (screenshot)](dark.png) |
+| ![Light (screenshot)](assets/screenshots/light.png) | ![Dark (screenshot)](assets/screenshots/dark.png) |
 
+---
 ## ✨ Highlights
 
+- 📦 **NativeAOT + trimming** first
+- 🪶 **Lightweight** by design (small EXE, low memory footprint, fast first frame — see benchmark below)
 - 🧩 Fluent **C# markup** (no XAML)
-- 🔗 Explicit **AOT-friendly binding** (`ObservableValue<T>`, delegate-based)
-- 📦 **NativeAOT + trimming** first (interop via `LibraryImport`)
 
-## 📦 Lightweight
+---
+## 🪶 Lightweight
 
 - **Executable size:** NativeAOT + Trim focused (sample `win-x64-trimmed` is ~ `2.2 MB`)
 - **Sample runtime benchmark** (NativeAOT + Trimmed, 50 launches):
@@ -35,6 +39,7 @@ Minimal, code-first lightweight .NET GUI library aimed at **NativeAOT + Trim**.
 | Direct2D | 10 / 11 | 178 / 190 | 40.0 / 40.1 | 54.8 / 55.8 |
 | GDI | 15 / 21 | 54 / 67 | 15.2 / 15.3 | 4.6 / 4.8 |
 
+---
 ## 🧪 C# Markup at a Glance
 
 ```csharp
@@ -59,32 +64,21 @@ var window = new Window()
 Application.Run(window);
 ```
 
+---
 ## 🎯 Concept
 
-MewUI is a code-first UI library with three priorities:
+### MewUI is a code-first UI library with three priorities:
+- **NativeAOT + trimming friendliness** (interop via `LibraryImport`)
 - **Fluent C# markup** for building UI trees (no XAML)
 - **AOT-friendly binding** (`ObservableValue<T>`, delegate-based, avoid reflection)
-- **NativeAOT + trimming friendliness** (interop via `LibraryImport`)
 
-Non-goals (by design):
+### Non-goals (by design):
 - WPF-style **animations**, **visual effects**, or heavy composition pipelines
 - A large, “kitchen-sink” control catalog (keep the surface area small and predictable)
 - Full XAML/WPF compatibility or designer-first workflows
 
-## 🚀 Quick Start
-
-Prerequisites: .NET SDK (`net10.0-windows`).
-
-Build:
-- `dotnet build .\MewUI.slnx -c Release`
-
-Run sample:
-- `dotnet run --project .\samples\MewUI.Sample\MewUI.Sample.csproj -c Release`
-
-Publish (NativeAOT + Trim, size-focused):
-- `dotnet publish .\samples\MewUI.Sample\MewUI.Sample.csproj -c Release -p:PublishProfile=win-x64-trimmed`
-
-## 🧷 NativeAOT / Trim
+---
+## ✂️ NativeAOT / Trim
 
 - The library aims to be trimming-safe by default (explicit code paths, no reflection-based binding).
 - Windows interop uses source-generated P/Invoke (`LibraryImport`) for NativeAOT compatibility.
@@ -97,6 +91,7 @@ To check output size locally:
 Reference (sample, `win-x64-trimmed`):
 - `Aprillz.MewUI Demo.exe` ~ `2,257 KB`
 
+---
 ## 🔗 State & Binding (AOT-friendly)
 
 Bindings are explicit and delegate-based (no reflection):
@@ -105,24 +100,25 @@ Bindings are explicit and delegate-based (no reflection):
 using Aprillz.MewUI.Binding;
 using Aprillz.MewUI.Controls;
 
-var percent = new ObservableValue<double>(0.25);
+var percent = new ObservableValue<double>(
+    initialValue: 0.25,
+    coerce: v => Math.Clamp(v, 0, 1));
 
 var slider = new Slider().BindValue(percent);
 var label  = new Label().BindText(percent, v => $"Percent ({v:P0})");
 ```
 
-## 🎨 Theme
+- Tips
+  - ✅ `Converter`: bind derived values without extra state
+    ```csharp
+    var label = new Label().BindText(percent, v => $"Percent ({v:P0})");
+    ```
+  - 🧲 `Coerce`: clamp/normalize values at the source
+    ```csharp
+    var percent = new ObservableValue<double>(0.25, coerce: v => Math.Clamp(v, 0, 1));
+    ```
 
-Theme is split into two parts:
-- `Palette` - colors (including derived colors based on background + accent)
-- `Theme` - non-color parameters (corner radius, default font, plus a `Palette`)
-
-Accent switching:
-
-```csharp
-Theme.Current = Theme.Current.WithAccent(Color.FromRgb(214, 176, 82));
-```
-
+---
 ## 🧱 Controls / Panels
 
 Controls:
@@ -138,18 +134,33 @@ Panels:
 - `DockPanel` (dock edges + last-child fill)
 - `UniformGrid` (equal cells)
 - `WrapPanel` (wrap + item size + spacing)
+---
+## 🎨 Theme
 
+Theme is split into two parts:
+- `Palette` - colors (including derived colors based on background + accent)
+- `Theme` - non-color parameters (corner radius, default font, plus a `Palette`)
+
+Accent switching:
+
+```csharp
+Theme.Current = Theme.Current.WithAccent(Color.FromRgb(214, 176, 82));
+```
+
+---
 ## 🖌️ Rendering Backends
 
 Rendering is abstracted through:
 - `IGraphicsFactory` / `IGraphicsContext`
 
-The sample defaults to Direct2D, with a GDI backend also available.
+The sample defaults to `Direct2D`, with a `GDI` backend also available.
 
+---
 ## 🪟 Platform Abstraction
 
 Windowing and the message loop are abstracted behind a platform layer. The current implementation is Windows-only (`Win32PlatformHost`), with the intent to add Linux/macOS backends later.
 
+---
 ## 🧭 Roadmap (TODO)
 
 **Controls**
@@ -166,5 +177,5 @@ Windowing and the message loop are abstracted behind a platform layer. The curre
 - [ ] macOS
 
 **Tooling**
-- [ ] Hot Reload (design-time oriented)
-
+- [ ] Hot Reload 
+- [ ] Design-time preview

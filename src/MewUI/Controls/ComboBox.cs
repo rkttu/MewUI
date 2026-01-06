@@ -100,6 +100,11 @@ public sealed class ComboBox : Control, IDisposable, IPopupOwner
         if (BorderBrush == oldTheme.ControlBorder)
             BorderBrush = newTheme.ControlBorder;
         base.OnThemeChanged(oldTheme, newTheme);
+
+        // The popup ListBox can exist while the dropdown is closed, so it won't be in the Window visual tree
+        // and would miss theme broadcasts. Keep it in sync here.
+        if (_popupList != null && _popupList.Parent == null)
+            _popupList.NotifyThemeChanged(oldTheme, newTheme);
     }
 
     protected override Size MeasureContent(Size availableSize)
