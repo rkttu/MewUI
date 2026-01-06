@@ -1,10 +1,12 @@
-<img src="https://raw.githubusercontent.com/aprillz/MewUI/main/assets/logo/logo-256.png" alt="Aprillz.MewUI" width="256" height="256" />
+![Aprillz.MewUI](https://raw.githubusercontent.com/aprillz/MewUI/main/assets/logo/logo-480.png)
 
 
 ![.NET](https://img.shields.io/badge/.NET-8%2B-512BD4?logo=dotnet&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-10%2B-0078D4?logo=windows&logoColor=white)
 ![NativeAOT](https://img.shields.io/badge/NativeAOT-Ready-2E7D32)
 ![License: MIT](https://img.shields.io/badge/License-MIT-000000)
+[![NuGet](https://img.shields.io/nuget/v/Aprillz.MewUI.svg?label=NuGet)](https://www.nuget.org/packages/Aprillz.MewUI/)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/Aprillz.MewUI.svg?label=Downloads)](https://www.nuget.org/packages/Aprillz.MewUI/)
 
 ---
 
@@ -14,6 +16,11 @@
 
 - **참고:** 🤖 이 저장소의 대부분의 코드는 GPT의 도움으로 작성되었습니다.
 ---
+
+## NuGet
+
+- https://www.nuget.org/packages/Aprillz.MewUI/
+- 설치: `dotnet add package Aprillz.MewUI --prerelease`
 
 ## 스크린샷
 
@@ -64,6 +71,7 @@ var window = new Window()
 Application.Run(window);
 ```
 
+- 샘플 소스: https://github.com/aprillz/MewUI/blob/main/samples/MewUI.Sample/Program.cs
 ---
 ## 🎯 컨셉
 
@@ -91,7 +99,7 @@ Application.Run(window);
 - 출력 확인: `.artifacts\publish\MewUI.Sample\win-x64-trimmed\`
 
 참고(샘플, `win-x64-trimmed`):
-- `Aprillz.MewUI Demo.exe` 약 `2,257 KB`
+- `Aprillz.MewUI.Sample.exe` 약 `2,257 KB`
 
 ---
 ## 🔗 상태/바인딩(AOT 친화)
@@ -146,6 +154,8 @@ Theme.Current = Theme.Current.WithAccent(Color.FromRgb(214, 176, 82));
 - `IGraphicsFactory` / `IGraphicsContext`
 
 샘플은 기본적으로 `Direct2D`를 사용하며, `GDI` 백엔드도 제공됩니다.
+- `Direct2D`: 초기엔 느리고 상주 메모리가 크지만, 복잡한 레이아웃/효과에 더 적합
+- `GDI`: 가볍고 빠르게 시작되지만, CPU 사용이 커서 고해상도/큰 창/복잡한 UI에는 부적합
 
 ---
 ## 🪟 플랫폼 추상화

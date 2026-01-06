@@ -1,10 +1,12 @@
-<img src="https://raw.githubusercontent.com/aprillz/MewUI/main/assets/logo/logo-256.png" alt="Aprillz.MewUI" width="256" height="256" />
+![Aprillz.MewUI](https://raw.githubusercontent.com/aprillz/MewUI/main/assets/logo/logo-480.png)
 
 
 ![.NET](https://img.shields.io/badge/.NET-8%2B-512BD4?logo=dotnet&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-10%2B-0078D4?logo=windows&logoColor=white)
 ![NativeAOT](https://img.shields.io/badge/NativeAOT-Ready-2E7D32)
 ![License: MIT](https://img.shields.io/badge/License-MIT-000000)
+[![NuGet](https://img.shields.io/nuget/v/Aprillz.MewUI.svg?label=NuGet)](https://www.nuget.org/packages/Aprillz.MewUI/)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/Aprillz.MewUI.svg?label=Downloads)](https://www.nuget.org/packages/Aprillz.MewUI/)
 
 ---
 
@@ -14,6 +16,11 @@
 
 - **Note:** 🤖 most of the code in this repository is written with the help of GPT.
 ---
+
+## NuGet
+
+- https://www.nuget.org/packages/Aprillz.MewUI/
+- Install: `dotnet add package Aprillz.MewUI --prerelease`
 
 ## Screenshots
 
@@ -41,6 +48,8 @@
 
 ---
 ## 🧪 C# Markup at a Glance
+
+- Sample source: https://github.com/aprillz/MewUI/blob/main/samples/MewUI.Sample/Program.cs
 
 ```csharp
 var window = new Window()
@@ -91,7 +100,7 @@ To check output size locally:
 - Inspect: `.artifacts\publish\MewUI.Sample\win-x64-trimmed\`
 
 Reference (sample, `win-x64-trimmed`):
-- `Aprillz.MewUI Demo.exe` ~ `2,257 KB`
+- `Aprillz.MewUI.Sample.exe` ~ `2,257 KB`
 
 ---
 ## 🔗 State & Binding (AOT-friendly)
@@ -109,16 +118,6 @@ var percent = new ObservableValue<double>(
 var slider = new Slider().BindValue(percent);
 var label  = new Label().BindText(percent, v => $"Percent ({v:P0})");
 ```
-
-- Tips
-  - ✅ `Converter`: bind derived values without extra state
-    ```csharp
-    var label = new Label().BindText(percent, v => $"Percent ({v:P0})");
-    ```
-  - 🧲 `Coerce`: clamp/normalize values at the source
-    ```csharp
-    var percent = new ObservableValue<double>(0.25, coerce: v => Math.Clamp(v, 0, 1));
-    ```
 
 ---
 ## 🧱 Controls / Panels
@@ -156,6 +155,8 @@ Rendering is abstracted through:
 - `IGraphicsFactory` / `IGraphicsContext`
 
 The sample defaults to `Direct2D`, with a `GDI` backend also available.
+- `Direct2D`: slower startup and larger resident memory, but better suited for complex layouts/effects
+- `GDI`: lightweight and fast startup, but CPU-heavy and not ideal for high-DPI, large windows, or complex UIs
 
 ---
 ## 🪟 Platform Abstraction
