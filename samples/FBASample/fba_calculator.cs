@@ -1,6 +1,6 @@
 #:sdk Microsoft.NET.Sdk
 #:property OutputType=WinExe
-#:property TargetFramework=net10.0-windows
+#:property TargetFramework=net10.0
 #:property PublishAot=true
 #:property TrimMode=full
 #:property IlcOptimizationPreference=Size
@@ -24,7 +24,10 @@ using Aprillz.MewUI.Panels;
 using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 
-Application.DefaultGraphicsBackend = GraphicsBackend.Gdi;
+// GDI is Windows-only; fall back to OpenGL on Linux.
+Application.DefaultGraphicsBackend = OperatingSystem.IsWindows()
+    ? GraphicsBackend.Gdi
+    : GraphicsBackend.OpenGL;
 
 var goldAccent = Color.FromRgb(214, 176, 82);
 Theme.Current = Theme.Dark.WithAccent(goldAccent);

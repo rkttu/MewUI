@@ -11,23 +11,16 @@
 
 ---
 
-**😺 MewUI**는 **NativeAOT + Trim** 앱을 목표로 하는, 코드 기반(code-first) 경량 .NET GUI 라이브러리입니다.
+**😺 MewUI**는 **크로스플랫폼** **NativeAOT + Trim** 앱을 목표로 하는, 코드 기반(code-first) 경량 .NET GUI 라이브러리입니다.
 
 - **상태:** 🧪 실험적 프로토타입 버전입니다(기능/동작/API는 변경될 수 있습니다).
 
 - **참고:** 🤖 이 저장소의 대부분의 코드는 GPT의 도움으로 작성되었습니다.
----
-
-## NuGet
-
-- https://www.nuget.org/packages/Aprillz.MewUI/
-- 설치: `dotnet add package Aprillz.MewUI`
-
----
-## 비디오
+ 
+### 비디오
 https://github.com/user-attachments/assets/876c1450-de36-4ccf-9cf8-b47f035a300f
 
-## 스크린샷
+### 스크린샷
 
 | Light | Dark |
 |---|---|
@@ -52,31 +45,54 @@ https://github.com/user-attachments/assets/876c1450-de36-4ccf-9cf8-b47f035a300f
 | GDI | 15 / 21 | 54 / 67 | 15.2 / 15.3 | 4.6 / 4.8 |
 
 ---
+
+## 🚀 빠른 시작
+
+- NuGet: https://www.nuget.org/packages/Aprillz.MewUI/
+  - 설치: `dotnet add package Aprillz.MewUI`
+
+- 단일 파일로 빠르게 시작(VS Code 친화)
+  - 참고: `samples/FBASample/fba_calculator.cs`
+  - AOT/Trim 옵션을 제외한 최소 헤더:
+
+    ```csharp
+    #:sdk Microsoft.NET.Sdk
+    #:property OutputType=Exe
+    #:property TargetFramework=net10.0
+
+    #:package Aprillz.MewUI@0.2.0
+   
+    //...
+    ```
+
+- 실행: `dotnet run your_app.cs`
+
+---
 ## 🧪 C# 마크업 예시
 
-```csharp
-var window = new Window()
-    .Title("Hello MewUI")
-    .Size(520, 360)
-    .Padding(12)
-    .Content(
-        new StackPanel()
-            .Spacing(8)
-            .Children(
-                new Label()
-                    .Text("Hello, Aprillz.MewUI")
-                    .FontSize(18)
-                    .Bold(),
-                new Button()
-                    .Content("Quit")
-                    .OnClick(() => Application.Quit())
-            )
-    );
-
-Application.Run(window);
-```
-
 - 샘플 소스: https://github.com/aprillz/MewUI/blob/main/samples/MewUI.Sample/Program.cs
+    ```csharp
+    var window = new Window()
+        .Title("Hello MewUI")
+        .Size(520, 360)
+        .Padding(12)
+        .Content(
+            new StackPanel()
+                .Spacing(8)
+                .Children(
+                    new Label()
+                        .Text("Hello, Aprillz.MewUI")
+                        .FontSize(18)
+                        .Bold(),
+                    new Button()
+                        .Content("Quit")
+                        .OnClick(() => Application.Quit())
+                )
+        );
+
+    Application.Run(window);
+    ```
+
 ---
 ## 🎯 컨셉
 
@@ -97,6 +113,7 @@ Application.Run(window);
 
 - 기본적으로 trimming-safe를 지향합니다(명시적 코드 경로, 리플렉션 기반 바인딩 없음).
 - Windows interop은 NativeAOT 호환을 위해 소스 생성 P/Invoke(`LibraryImport`)를 사용합니다.
+- Linux에서 NativeAOT로 빌드하려면, 일반 .NET SDK 외에 AOT 워크로드가 필요합니다(예: 배포판 패키지로 `dotnet-sdk-aot-10.0` 설치).
 - interop/dynamic 기능을 추가했다면, 위 publish 설정으로 반드시 검증하는 것을 권장합니다.
 
 로컬에서 확인:

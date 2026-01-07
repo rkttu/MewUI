@@ -11,23 +11,18 @@
 
 ---
 
-**😺 MewUI** is minimal, code-first .NET GUI library aimed at **NativeAOT + Trim**.
+**😺 MewUI** is a **cross-platform** and minimal, code-first .NET GUI library aimed at **NativeAOT + Trim**.
 
 - **Status:** 🧪 experimental prototype (APIs and behavior may change).
 
 - **Note:** 🤖 most of the code in this repository is written with the help of GPT.
----
 
-## NuGet
 
-- https://www.nuget.org/packages/Aprillz.MewUI/
-- Install: `dotnet add package Aprillz.MewUI`
 
----
-## Video
+### Video
 https://github.com/user-attachments/assets/876c1450-de36-4ccf-9cf8-b47f035a300f
 
-## Screenshots
+### Screenshots
 
 | Light | Dark |
 |---|---|
@@ -52,31 +47,53 @@ https://github.com/user-attachments/assets/876c1450-de36-4ccf-9cf8-b47f035a300f
 | GDI | 15 / 21 | 54 / 67 | 15.2 / 15.3 | 4.6 / 4.8 |
 
 ---
+
+## 🚀 Quickstart
+
+- NuGet: https://www.nuget.org/packages/Aprillz.MewUI/
+  - Install: `dotnet add package Aprillz.MewUI`
+
+- Single-file app (VS Code friendly)
+  - See: [samples/FBASample/fba_calculator.cs](samples/FBASample/fba_calculator.cs)
+  - Minimal header (without AOT/Trim options):
+
+    ```csharp
+    #:sdk Microsoft.NET.Sdk
+    #:property OutputType=Exe
+    #:property TargetFramework=net10.0
+
+    #:package Aprillz.MewUI@0.2.0
+
+    // ...
+    ```
+
+- Run: `dotnet run your_app.cs`
+---
 ## 🧪 C# Markup at a Glance
 
 - Sample source: https://github.com/aprillz/MewUI/blob/main/samples/MewUI.Sample/Program.cs
 
-```csharp
-var window = new Window()
-    .Title("Hello MewUI")
-    .Size(520, 360)
-    .Padding(12)
-    .Content(
-        new StackPanel()
-            .Spacing(8)
-            .Children(
-                new Label()
-                    .Text("Hello, Aprillz.MewUI")
-                    .FontSize(18)
-                    .Bold(),
-                new Button()
-                    .Content("Quit")
-                    .OnClick(() => Application.Quit())
-            )
-    );
+   ```csharp
+    var window = new Window()
+        .Title("Hello MewUI")
+        .Size(520, 360)
+        .Padding(12)
+        .Content(
+            new StackPanel()
+                .Spacing(8)
+                .Children(
+                    new Label()
+                        .Text("Hello, Aprillz.MewUI")
+                        .FontSize(18)
+                        .Bold(),
+                    new Button()
+                        .Content("Quit")
+                        .OnClick(() => Application.Quit())
+                )
+        );
 
-Application.Run(window);
-```
+    Application.Run(window);
+    ```
 
 ---
 ## 🎯 Concept
@@ -98,6 +115,7 @@ Application.Run(window);
 
 - The library aims to be trimming-safe by default (explicit code paths, no reflection-based binding).
 - Windows interop uses source-generated P/Invoke (`LibraryImport`) for NativeAOT compatibility.
+- On Linux, building with NativeAOT requires the AOT workload in addition to the regular .NET SDK (e.g. install `dotnet-sdk-aot-10.0`).
 - If you introduce new interop or dynamic features, verify with the trimmed publish profile above.
 
 To check output size locally:
