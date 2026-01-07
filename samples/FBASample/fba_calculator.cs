@@ -2,6 +2,14 @@
 #:property OutputType=WinExe
 #:property TargetFramework=net10.0-windows
 #:property PublishAot=true
+#:property TrimMode=full
+#:property IlcOptimizationPreference=Size
+
+#:property InvariantGlobalization=true
+
+#:property DebugType=none
+#:property StripSymbols=true
+
 #:package Aprillz.MewUI@0.1.0-preview.1
 
 using System.Globalization;
