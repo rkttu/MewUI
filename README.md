@@ -13,14 +13,18 @@
 
 **😺 MewUI** is a **cross-platform** and minimal, code-first .NET GUI library aimed at **NativeAOT + Trim**.
 
-- **Status:** 🧪 experimental prototype (APIs and behavior may change).
+- ## 🧪 Experimental Prototype
+  > ⚠️ This project is a **proof-of-concept prototype** for validating ideas and exploring design directions.  
+  > ⚠️ As it evolves toward **v1.0**, **APIs, internal architecture, and runtime behavior may change significantly**.  
+  > ⚠️ Backward compatibility is **not guaranteed** at this stage.
 
-- **Note:** 🤖 most of the code in this repository is written with the help of GPT.
-
-
+- ## 🤖 AI-Assisted Development 
+  > This project was developed using an **AI prompt–driven workflow**.  
+  > Design and implementation were performed through **iterative prompting without direct manual code edits**,  
+  > with each step reviewed and refined by the developer.
 
 ### Video
-https://github.com/user-attachments/assets/876c1450-de36-4ccf-9cf8-b47f035a300f
+https://raw.githubusercontent.com/aprillz/MewUI/main/assets/videos/MewUI.Demo_0.1.0.mp4
 
 ### Screenshots
 
