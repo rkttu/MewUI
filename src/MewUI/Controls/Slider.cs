@@ -52,7 +52,6 @@ public sealed class Slider : Control
         Background = Color.Transparent;
         BorderThickness = 1;
         Height = 24;
-        Padding = new Thickness(6, 2, 6, 2);
     }
 
     public void SetValueBinding(

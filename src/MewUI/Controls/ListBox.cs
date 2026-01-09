@@ -83,15 +83,21 @@ public class ListBox : Control
         double itemHeight = ResolveItemHeight();
         double height = _items.Count * itemHeight;
 
+        var borderInset = GetBorderVisualInset();
+
         // Cache extent/viewport for scroll bar (viewport is approximated here; final value computed in Arrange).
         _extentHeight = height;
-        _viewportHeight = double.IsPositiveInfinity(availableSize.Height) ? height : Math.Max(0, availableSize.Height - Padding.VerticalThickness);
+        _viewportHeight = double.IsPositiveInfinity(availableSize.Height)
+            ? height
+            : Math.Max(0, availableSize.Height - Padding.VerticalThickness - borderInset * 2);
 
         double desiredHeight = double.IsPositiveInfinity(availableSize.Height)
             ? height
             : Math.Min(height, _viewportHeight);
 
-        return new Size(maxWidth, desiredHeight).Inflate(Padding);
+        return new Size(maxWidth, desiredHeight)
+            .Inflate(Padding)
+            .Inflate(new Thickness(borderInset));
     }
 
     protected override void ArrangeContent(Rect bounds)
@@ -101,9 +107,9 @@ public class ListBox : Control
         var theme = GetTheme();
         var snapped = GetSnappedBorderBounds(Bounds);
         var borderInset = GetBorderVisualInset();
-        var contentBounds = snapped.Deflate(Padding).Deflate(new Thickness(borderInset));
+        var innerBounds = snapped.Deflate(new Thickness(borderInset));
 
-        _viewportHeight = Math.Max(0, contentBounds.Height);
+        _viewportHeight = Math.Max(0, innerBounds.Height - Padding.VerticalThickness);
         _verticalOffset = ClampVerticalOffset(_verticalOffset);
 
         bool needV = _extentHeight > _viewportHeight + 0.5;
@@ -111,8 +117,8 @@ public class ListBox : Control
 
         if (_vBar.IsVisible)
         {
-            double t = theme.ScrollBarThickness;
-            const double inset = 1;
+            double t = theme.ScrollBarHitThickness;
+            const double inset = 0;
 
             _vBar.Minimum = 0;
             _vBar.Maximum = Math.Max(0, _extentHeight - _viewportHeight);
@@ -122,10 +128,10 @@ public class ListBox : Control
             _vBar.Value = _verticalOffset;
 
             _vBar.Arrange(new Rect(
-                contentBounds.Right - t - inset,
-                contentBounds.Y + inset,
+                innerBounds.Right - t - inset,
+                innerBounds.Y + inset,
                 t,
-                Math.Max(0, contentBounds.Height - inset * 2)));
+                Math.Max(0, innerBounds.Height - inset * 2)));
         }
     }
 
@@ -151,7 +157,12 @@ public class ListBox : Control
         if (_items.Count == 0)
             return;
 
-        var contentBounds = bounds.Deflate(Padding).Deflate(new Thickness(borderInset));
+        var innerBounds = bounds.Deflate(new Thickness(borderInset));
+        var viewportBounds = innerBounds;
+        if (_vBar.IsVisible)
+            viewportBounds = viewportBounds.Deflate(new Thickness(0, 0, theme.ScrollBarHitThickness + 1, 0));
+        var contentBounds = viewportBounds.Deflate(Padding);
+
         context.Save();
         context.SetClip(contentBounds);
 
@@ -210,9 +221,14 @@ public class ListBox : Control
 
         Focus();
 
-        var contentBounds = GetSnappedBorderBounds(Bounds)
-            .Deflate(Padding)
-            .Deflate(new Thickness(GetBorderVisualInset()));
+        var theme = GetTheme();
+        var bounds = GetSnappedBorderBounds(Bounds);
+        var innerBounds = bounds.Deflate(new Thickness(GetBorderVisualInset()));
+        var viewportBounds = innerBounds;
+        if (_vBar.IsVisible)
+            viewportBounds = viewportBounds.Deflate(new Thickness(0, 0, theme.ScrollBarHitThickness + 1, 0));
+        var contentBounds = viewportBounds.Deflate(Padding);
+
         int index = (int)((e.Position.Y - contentBounds.Y + _verticalOffset) / ResolveItemHeight());
         if (index >= 0 && index < _items.Count)
         {
