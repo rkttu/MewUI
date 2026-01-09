@@ -26,7 +26,7 @@ var vm = new DemoViewModel();
 var root = new Window()
     .Ref(out window)
     .Title("Aprillz.MewUI Demo")
-    .Size(744, 640)
+    .Resizable(744, 640)
     .Padding(10)
     .OnLoaded(() =>
     {
@@ -268,7 +268,7 @@ Element BindSamples()
             new Grid()
                 .Rows("Auto,Auto,Auto,*")
                 .Columns("100,*")
-                .ChildMargin(8)
+                .Spacing(8)
                 .Children(
                 new Label()
                     .Row(0).Column(0)

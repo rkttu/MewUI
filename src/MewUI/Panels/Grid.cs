@@ -84,26 +84,32 @@ public class Grid : Panel
     public IList<ColumnDefinition> ColumnDefinitions => _columnDefinitions;
 
     /// <summary>
-    /// When set, applies this margin to newly added children that do not already have a margin.
-    /// A margin is considered "not set" when it is <see cref="Thickness.Zero"/>.
+    /// Gets or sets whether children without explicit Row/Column are auto-placed.
     /// </summary>
-    public Thickness ChildMargin
+    public bool AutoIndexing
     {
         get;
-        set
-        {
-            field = value;
-            ApplyChildMarginToExistingChildren();
-        }
-    } = Thickness.Zero;
+        set { field = value; InvalidateMeasure(); }
+    } = true;
+
+    /// <summary>
+    /// Gets or sets the spacing between grid cells (both row/column gaps).
+    /// </summary>
+    public double Spacing
+    {
+        get;
+        set { field = value; InvalidateMeasure(); }
+    }
 
     #region Attached Properties
 
     public static void SetRow(Element element, int row) => _rowProperty[element] = row;
     public static int GetRow(Element element) => _rowProperty.GetValueOrDefault(element, 0);
+    internal static bool HasRow(Element element) => _rowProperty.ContainsKey(element);
 
     public static void SetColumn(Element element, int column) => _columnProperty[element] = column;
     public static int GetColumn(Element element) => _columnProperty.GetValueOrDefault(element, 0);
+    internal static bool HasColumn(Element element) => _columnProperty.ContainsKey(element);
 
     public static void SetRowSpan(Element element, int span) => _rowSpanProperty[element] = span;
     public static int GetRowSpan(Element element) => _rowSpanProperty.GetValueOrDefault(element, 1);
@@ -121,16 +127,12 @@ public class Grid : Panel
         _columnSpanProperty.Remove(child);
     }
 
-    protected override void OnChildAdded(Element child)
-    {
-        base.OnChildAdded(child);
-        ApplyChildMargin(child);
-    }
-
     protected override Size MeasureContent(Size availableSize)
     {
         var paddedSize = availableSize.Deflate(Padding);
         EnsureDefinitions();
+        if (AutoIndexing)
+            EnsureAutoPlacement();
 
         int rowCount = _rowDefinitions.Count;
         int colCount = _columnDefinitions.Count;
@@ -138,14 +140,22 @@ public class Grid : Panel
         // First pass: measure children with infinite size to get desired sizes
         foreach (var child in Children)
         {
+            if (child is UIElement ui && !ui.IsVisible)
+                continue;
             child.Measure(Size.Infinity);
         }
 
+        double colGaps = colCount > 1 ? (colCount - 1) * Spacing : 0;
+        double rowGaps = rowCount > 1 ? (rowCount - 1) * Spacing : 0;
+
+        double availableWidth = Math.Max(0, paddedSize.Width - colGaps);
+        double availableHeight = Math.Max(0, paddedSize.Height - rowGaps);
+
         // Calculate column widths
-        CalculateLengths(_columnDefinitions, paddedSize.Width, true);
+        CalculateLengths(_columnDefinitions, availableWidth, true);
 
         // Calculate row heights
-        CalculateLengths(_rowDefinitions, paddedSize.Height, false);
+        CalculateLengths(_rowDefinitions, availableHeight, false);
 
         // Calculate total size
         double totalWidth = 0;
@@ -156,43 +166,42 @@ public class Grid : Panel
         foreach (var row in _rowDefinitions)
             totalHeight += row.ActualHeight;
 
+        totalWidth += colGaps;
+        totalHeight += rowGaps;
+
         return new Size(totalWidth, totalHeight).Inflate(Padding);
-    }
-
-    private void ApplyChildMarginToExistingChildren()
-    {
-        if (ChildMargin == Thickness.Zero)
-            return;
-
-        foreach (var child in Children)
-            ApplyChildMargin(child);
-    }
-
-    private void ApplyChildMargin(Element child)
-    {
-        if (ChildMargin == Thickness.Zero)
-            return;
-
-        if (child is FrameworkElement frameworkElement && frameworkElement.Margin == Thickness.Zero)
-            frameworkElement.Margin = ChildMargin;
     }
 
     protected override void ArrangeContent(Rect bounds)
     {
         var contentBounds = bounds.Deflate(Padding);
         EnsureDefinitions();
+        if (AutoIndexing)
+            EnsureAutoPlacement();
+
+        int rowCount = _rowDefinitions.Count;
+        int colCount = _columnDefinitions.Count;
+
+        double colGaps = colCount > 1 ? (colCount - 1) * Spacing : 0;
+        double rowGaps = rowCount > 1 ? (rowCount - 1) * Spacing : 0;
+
+        double availableWidth = Math.Max(0, contentBounds.Width - colGaps);
+        double availableHeight = Math.Max(0, contentBounds.Height - rowGaps);
 
         // Recalculate with actual available space
-        CalculateLengths(_columnDefinitions, contentBounds.Width, true);
-        CalculateLengths(_rowDefinitions, contentBounds.Height, false);
+        CalculateLengths(_columnDefinitions, availableWidth, true);
+        CalculateLengths(_rowDefinitions, availableHeight, false);
 
         // Calculate offsets
-        CalculateOffsets(_columnDefinitions);
-        CalculateOffsets(_rowDefinitions);
+        CalculateOffsets(_columnDefinitions, Spacing);
+        CalculateOffsets(_rowDefinitions, Spacing);
 
         // Arrange children
         foreach (var child in Children)
         {
+            if (child is UIElement ui && !ui.IsVisible)
+                continue;
+
             int row = GetRow(child);
             int col = GetColumn(child);
             int rowSpan = GetRowSpan(child);
@@ -216,6 +225,11 @@ public class Grid : Panel
             for (int i = row; i < row + rowSpan; i++)
                 height += _rowDefinitions[i].ActualHeight;
 
+            if (colSpan > 1)
+                width += (colSpan - 1) * Spacing;
+            if (rowSpan > 1)
+                height += (rowSpan - 1) * Spacing;
+
             child.Arrange(new Rect(x, y, width, height));
         }
     }
@@ -226,6 +240,185 @@ public class Grid : Panel
             _rowDefinitions.Add(new RowDefinition());
         if (_columnDefinitions.Count == 0)
             _columnDefinitions.Add(new ColumnDefinition());
+    }
+
+    private void EnsureAutoPlacement()
+    {
+        int rowCount = _rowDefinitions.Count;
+        int colCount = _columnDefinitions.Count;
+
+        if (rowCount <= 0 || colCount <= 0)
+            return;
+
+        var occupied = new bool[rowCount, colCount];
+
+        // First mark explicitly placed cells (both axes specified)
+        foreach (var child in Children)
+        {
+            if (child is UIElement ui && !ui.IsVisible)
+                continue;
+
+            bool hasRow = HasRow(child);
+            bool hasCol = HasColumn(child);
+            if (!hasRow || !hasCol)
+                continue;
+
+            int row = GetRow(child);
+            int col = GetColumn(child);
+
+            int rowSpan = Math.Max(1, GetRowSpan(child));
+            int colSpan = Math.Max(1, GetColumnSpan(child));
+
+            row = Math.Clamp(row, 0, rowCount - 1);
+            col = Math.Clamp(col, 0, colCount - 1);
+            rowSpan = Math.Clamp(rowSpan, 1, rowCount - row);
+            colSpan = Math.Clamp(colSpan, 1, colCount - col);
+
+            MarkOccupied(occupied, row, col, rowSpan, colSpan);
+        }
+
+        // Auto place remaining children
+        foreach (var child in Children)
+        {
+            if (child is UIElement ui && !ui.IsVisible)
+                continue;
+
+            bool hasRow = HasRow(child);
+            bool hasCol = HasColumn(child);
+            if (hasRow && hasCol)
+                continue;
+
+            int rowSpan = Math.Max(1, GetRowSpan(child));
+            int colSpan = Math.Max(1, GetColumnSpan(child));
+
+            int placedRow = 0;
+            int placedCol = 0;
+
+            bool placed = false;
+
+            if (hasRow && !hasCol)
+            {
+                int row = Math.Clamp(GetRow(child), 0, rowCount - 1);
+                rowSpan = Math.Clamp(rowSpan, 1, rowCount - row);
+                placed = TryFindInRow(occupied, rowCount, colCount, row, rowSpan, colSpan, out placedCol);
+                placedRow = row;
+            }
+            else if (!hasRow && hasCol)
+            {
+                int col = Math.Clamp(GetColumn(child), 0, colCount - 1);
+                colSpan = Math.Clamp(colSpan, 1, colCount - col);
+                placed = TryFindInColumn(occupied, rowCount, colCount, col, rowSpan, colSpan, out placedRow);
+                placedCol = col;
+            }
+            else
+            {
+                placed = TryFindFirstFit(occupied, rowCount, colCount, rowSpan, colSpan, out placedRow, out placedCol);
+            }
+
+            if (!placed)
+            {
+                placedRow = 0;
+                placedCol = 0;
+                rowSpan = Math.Clamp(rowSpan, 1, rowCount);
+                colSpan = Math.Clamp(colSpan, 1, colCount);
+            }
+
+            if (!hasRow) SetRow(child, placedRow);
+            if (!hasCol) SetColumn(child, placedCol);
+
+            MarkOccupied(occupied, placedRow, placedCol,
+                Math.Clamp(rowSpan, 1, rowCount - placedRow),
+                Math.Clamp(colSpan, 1, colCount - placedCol));
+        }
+    }
+
+    private static void MarkOccupied(bool[,] occupied, int row, int col, int rowSpan, int colSpan)
+    {
+        int rows = occupied.GetLength(0);
+        int cols = occupied.GetLength(1);
+
+        int maxRow = Math.Min(rows, row + rowSpan);
+        int maxCol = Math.Min(cols, col + colSpan);
+
+        for (int r = row; r < maxRow; r++)
+        for (int c = col; c < maxCol; c++)
+            occupied[r, c] = true;
+    }
+
+    private static bool CanPlace(bool[,] occupied, int row, int col, int rowSpan, int colSpan)
+    {
+        int rows = occupied.GetLength(0);
+        int cols = occupied.GetLength(1);
+
+        if (row < 0 || col < 0 || row >= rows || col >= cols)
+            return false;
+        if (row + rowSpan > rows || col + colSpan > cols)
+            return false;
+
+        for (int r = row; r < row + rowSpan; r++)
+        for (int c = col; c < col + colSpan; c++)
+            if (occupied[r, c])
+                return false;
+
+        return true;
+    }
+
+    private static bool TryFindFirstFit(bool[,] occupied, int rows, int cols, int rowSpan, int colSpan, out int row, out int col)
+    {
+        row = 0;
+        col = 0;
+
+        rowSpan = Math.Clamp(rowSpan, 1, rows);
+        colSpan = Math.Clamp(colSpan, 1, cols);
+
+        for (int r = 0; r < rows; r++)
+        for (int c = 0; c < cols; c++)
+        {
+            if (CanPlace(occupied, r, c, rowSpan, colSpan))
+            {
+                row = r;
+                col = c;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryFindInRow(bool[,] occupied, int rows, int cols, int row, int rowSpan, int colSpan, out int col)
+    {
+        col = 0;
+        rowSpan = Math.Clamp(rowSpan, 1, rows - row);
+        colSpan = Math.Clamp(colSpan, 1, cols);
+
+        for (int c = 0; c < cols; c++)
+        {
+            if (CanPlace(occupied, row, c, rowSpan, colSpan))
+            {
+                col = c;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryFindInColumn(bool[,] occupied, int rows, int cols, int col, int rowSpan, int colSpan, out int row)
+    {
+        row = 0;
+        rowSpan = Math.Clamp(rowSpan, 1, rows);
+        colSpan = Math.Clamp(colSpan, 1, cols - col);
+
+        for (int r = 0; r < rows; r++)
+        {
+            if (CanPlace(occupied, r, col, rowSpan, colSpan))
+            {
+                row = r;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void CalculateLengths<T>(IList<T> definitions, double available, bool isColumn) where T : class
@@ -252,6 +445,9 @@ public class Grid : Panel
                 double maxDesired = 0;
                 foreach (var child in Children)
                 {
+                    if (child is UIElement ui && !ui.IsVisible)
+                        continue;
+
                     int index = isColumn ? GetColumn(child) : GetRow(child);
                     int span = isColumn ? GetColumnSpan(child) : GetRowSpan(child);
                     int defIndex = definitions.IndexOf(def);
@@ -259,6 +455,8 @@ public class Grid : Panel
                     if (index <= defIndex && index + span > defIndex)
                     {
                         double desired = isColumn ? child.DesiredSize.Width : child.DesiredSize.Height;
+                        if (span > 1)
+                            desired = Math.Max(0, desired - (span - 1) * Spacing);
                         maxDesired = Math.Max(maxDesired, desired / span);
                     }
                 }
@@ -275,6 +473,9 @@ public class Grid : Panel
                     double maxDesired = 0;
                     foreach (var child in Children)
                     {
+                        if (child is UIElement ui && !ui.IsVisible)
+                            continue;
+
                         int index = isColumn ? GetColumn(child) : GetRow(child);
                         int span = isColumn ? GetColumnSpan(child) : GetRowSpan(child);
                         int defIndex = definitions.IndexOf(def);
@@ -282,6 +483,8 @@ public class Grid : Panel
                         if (index <= defIndex && index + span > defIndex)
                         {
                             double desired = isColumn ? child.DesiredSize.Width : child.DesiredSize.Height;
+                            if (span > 1)
+                                desired = Math.Max(0, desired - (span - 1) * Spacing);
                             maxDesired = Math.Max(maxDesired, desired / span);
                         }
                     }
@@ -325,7 +528,7 @@ public class Grid : Panel
             ((RowDefinition)(object)def).ActualHeight = size;
     }
 
-    private static void CalculateOffsets<T>(IList<T> definitions) where T : class
+    private static void CalculateOffsets<T>(IList<T> definitions, double spacing) where T : class
     {
         double offset = 0;
         foreach (var def in definitions)
@@ -333,12 +536,12 @@ public class Grid : Panel
             if (def is ColumnDefinition col)
             {
                 col.Offset = offset;
-                offset += col.ActualWidth;
+                offset += col.ActualWidth + spacing;
             }
             else if (def is RowDefinition row)
             {
                 row.Offset = offset;
-                offset += row.ActualHeight;
+                offset += row.ActualHeight + spacing;
             }
         }
     }

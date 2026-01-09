@@ -96,15 +96,15 @@ public static class PanelExtensions
         return grid;
     }
 
-    public static Grid ChildMargin(this Grid grid, Thickness margin)
+    public static Grid Spacing(this Grid grid, double spacing)
     {
-        grid.ChildMargin = margin;
+        grid.Spacing = spacing;
         return grid;
     }
 
-    public static Grid ChildMargin(this Grid grid, double uniform)
+    public static Grid AutoIndexing(this Grid grid, bool autoIndexing = true)
     {
-        grid.ChildMargin = new Thickness(uniform);
+        grid.AutoIndexing = autoIndexing;
         return grid;
     }
 
@@ -144,6 +144,12 @@ public static class PanelExtensions
     public static UniformGrid Columns(this UniformGrid grid, int columns)
     {
         grid.Columns = columns;
+        return grid;
+    }
+
+    public static UniformGrid Spacing(this UniformGrid grid, double spacing)
+    {
+        grid.Spacing = spacing;
         return grid;
     }
 

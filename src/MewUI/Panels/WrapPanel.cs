@@ -1,3 +1,4 @@
+using Aprillz.MewUI.Elements;
 using Aprillz.MewUI.Primitives;
 
 namespace Aprillz.MewUI.Panels;
@@ -54,9 +55,13 @@ public class WrapPanel : Panel
         double totalCross = 0;    // Total size in cross direction
 
         double maxMain = horizontal ? paddedSize.Width : paddedSize.Height;
+        bool hasPrevious = false;
 
         foreach (var child in Children)
         {
+            if (child is UIElement ui && !ui.IsVisible)
+                continue;
+
             // Measure with item constraints if specified
             var measureSize = new Size(
                 double.IsNaN(ItemWidth) ? paddedSize.Width : ItemWidth,
@@ -69,7 +74,7 @@ public class WrapPanel : Panel
             double childMain = horizontal ? childWidth : childHeight;
             double childCross = horizontal ? childHeight : childWidth;
 
-            double spacing = lineOffset > 0 ? Spacing : 0;
+            double spacing = hasPrevious && lineOffset > 0 ? Spacing : 0;
 
             // Check if we need to wrap
             if (lineOffset + spacing + childMain > maxMain && lineOffset > 0)
@@ -87,6 +92,8 @@ public class WrapPanel : Panel
                 lineSize = Math.Max(lineSize, childCross);
                 totalMain = Math.Max(totalMain, lineOffset);
             }
+
+            hasPrevious = true;
         }
 
         // Add last line
@@ -118,6 +125,9 @@ public class WrapPanel : Panel
         for (int i = 0; i < Children.Count; i++)
         {
             var child = Children[i];
+            if (child is UIElement ui && !ui.IsVisible)
+                continue;
+
             double childWidth = double.IsNaN(ItemWidth) ? child.DesiredSize.Width : ItemWidth;
             double childHeight = double.IsNaN(ItemHeight) ? child.DesiredSize.Height : ItemHeight;
             double childMain = horizontal ? childWidth : childHeight;
@@ -149,10 +159,14 @@ public class WrapPanel : Panel
         foreach (var (start, count, size) in lines)
         {
             double mainOffset = 0;
+            int arranged = 0;
 
-            for (int i = start; i < start + count; i++)
+            for (int i = start; i < Children.Count && arranged < count; i++)
             {
                 var child = Children[i];
+                if (child is UIElement ui && !ui.IsVisible)
+                    continue;
+
                 double childWidth = double.IsNaN(ItemWidth) ? child.DesiredSize.Width : ItemWidth;
                 double childHeight = double.IsNaN(ItemHeight) ? child.DesiredSize.Height : ItemHeight;
 
@@ -162,6 +176,7 @@ public class WrapPanel : Panel
 
                 child.Arrange(childRect);
                 mainOffset += (horizontal ? childWidth : childHeight) + Spacing;
+                arranged++;
             }
 
             crossOffset += size + Spacing;
