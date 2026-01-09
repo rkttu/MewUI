@@ -26,7 +26,7 @@ var vm = new DemoViewModel();
 var root = new Window()
     .Ref(out window)
     .Title("Aprillz.MewUI Demo")
-    .Size(620, 560)
+    .Size(744, 640)
     .Padding(10)
     .OnLoaded(() =>
     {
@@ -162,6 +162,26 @@ Element NormalControls() => new StackPanel()
                     .Column(1)
             ),
 
+        new Grid()
+            .Columns("Auto, *")
+            .Margin(0, 0, 0, 10)
+            .Children(
+                new Label()
+                    .Text("Notes:")
+                    .Column(0)
+                    .Margin(0, 0, 10, 0)
+                    .CenterVertical(),
+
+                new MultiLineTextBox()
+                    .Column(1)
+                    .Height(80)
+                    .Apply(t =>
+                    {
+                        t.Placeholder = "Type multi-line text (wheel scroll + thin scrollbar)";
+                        t.Text = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7";
+                    })
+            ),
+
         new StackPanel()
             .Vertical()
             .Spacing(10)
@@ -219,9 +239,9 @@ Element NormalControls() => new StackPanel()
             ),
 
             new ListBox()
-                .Items("First", "Second", "Third")
+                .Items("First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth", "Tenth")
                 .SelectedIndex(1)
-                .Height(70),
+                .Height(74),
 
             new DockPanel()
                 .Children(
@@ -333,7 +353,7 @@ Element BindSamples() => new StackPanel()
                             .Ref(out var selectionListBox)
                             .Items("Alpha", "Beta", "Gamma", "Delta")
                             .BindSelectedIndex(vm.SelectedIndex)
-                            .Height(90)
+                            .Height(100)
                             .Width(80),
 
                         new Label()

@@ -549,54 +549,16 @@ public class TextBox : Control
 
     private static void SetClipboardText(string text)
     {
-        if (!Native.User32.OpenClipboard(0)) return;
-        try
-        {
-            Native.User32.EmptyClipboard();
-            var bytes = System.Text.Encoding.Unicode.GetBytes(text + "\0");
-            var hGlobal = Native.Kernel32.GlobalAlloc(0x0042, (nuint)bytes.Length); // GMEM_MOVEABLE | GMEM_ZEROINIT
-            if (hGlobal != 0)
-            {
-                var ptr = Native.Kernel32.GlobalLock(hGlobal);
-                if (ptr != 0)
-                {
-                    System.Runtime.InteropServices.Marshal.Copy(bytes, 0, ptr, bytes.Length);
-                    Native.Kernel32.GlobalUnlock(hGlobal);
-                    Native.User32.SetClipboardData(13, hGlobal); // CF_UNICODETEXT
-                }
-            }
-        }
-        finally
-        {
-            Native.User32.CloseClipboard();
-        }
+        if (!Core.Application.IsRunning)
+            return;
+        Core.Application.Current.PlatformHost.Clipboard.TrySetText(text ?? string.Empty);
     }
 
     private static string GetClipboardText()
     {
-        if (!Native.User32.IsClipboardFormatAvailable(13)) return string.Empty; // CF_UNICODETEXT
-        if (!Native.User32.OpenClipboard(0)) return string.Empty;
-        try
-        {
-            var hGlobal = Native.User32.GetClipboardData(13);
-            if (hGlobal == 0) return string.Empty;
-
-            var ptr = Native.Kernel32.GlobalLock(hGlobal);
-            if (ptr == 0) return string.Empty;
-
-            try
-            {
-                return System.Runtime.InteropServices.Marshal.PtrToStringUni(ptr) ?? string.Empty;
-            }
-            finally
-            {
-                Native.Kernel32.GlobalUnlock(hGlobal);
-            }
-        }
-        finally
-        {
-            Native.User32.CloseClipboard();
-        }
+        if (!Core.Application.IsRunning)
+            return string.Empty;
+        return Core.Application.Current.PlatformHost.Clipboard.TryGetText(out var text) ? text : string.Empty;
     }
 
     public void SetTextBinding(
