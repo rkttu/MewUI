@@ -16,6 +16,7 @@ public class ListBox : Control
     private double _verticalOffset;
     private double _extentHeight;
     private double _viewportHeight;
+    private int? _pendingScrollIntoViewIndex;
 
     public IList<string> Items => _items;
 
@@ -35,6 +36,7 @@ public class ListBox : Control
 
             field = clamped;
             SelectionChanged?.Invoke(field);
+            ScrollIntoView(field);
             InvalidateVisual();
         }
     } = -1;
@@ -207,6 +209,12 @@ public class ListBox : Control
                 t,
                 Math.Max(0, innerBounds.Height - inset * 2)));
         }
+
+        if (_pendingScrollIntoViewIndex is int pending)
+        {
+            _pendingScrollIntoViewIndex = null;
+            ScrollIntoView(pending);
+        }
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -351,6 +359,44 @@ public class ListBox : Control
         }
     }
 
+    public void ScrollIntoViewSelected() => ScrollIntoView(SelectedIndex);
+
+    public void ScrollIntoView(int index)
+    {
+        if (index < 0 || index >= _items.Count)
+            return;
+
+        double viewport = GetViewportHeightDip();
+        if (viewport <= 0 || double.IsNaN(viewport) || double.IsInfinity(viewport))
+        {
+            _pendingScrollIntoViewIndex = index;
+            return;
+        }
+
+        double itemHeight = ResolveItemHeight();
+        if (itemHeight <= 0)
+            return;
+
+        double itemTop = index * itemHeight;
+        double itemBottom = itemTop + itemHeight;
+
+        double newOffset = _verticalOffset;
+        if (itemTop < newOffset)
+            newOffset = itemTop;
+        else if (itemBottom > newOffset + viewport)
+            newOffset = itemBottom - viewport;
+
+        newOffset = ClampVerticalOffset(newOffset);
+        if (newOffset.Equals(_verticalOffset))
+            return;
+
+        _verticalOffset = newOffset;
+        if (_vBar.IsVisible)
+            _vBar.Value = _verticalOffset;
+
+        InvalidateVisual();
+    }
+
     public void AddItem(string item)
     {
         _items.Add(item ?? string.Empty);
@@ -379,6 +425,19 @@ public class ListBox : Control
         if (double.IsNaN(value) || double.IsInfinity(value))
             return 0;
         return Math.Clamp(value, 0, max);
+    }
+
+    private double GetViewportHeightDip()
+    {
+        if (Bounds.Width > 0 && Bounds.Height > 0)
+        {
+            var snapped = GetSnappedBorderBounds(Bounds);
+            var borderInset = GetBorderVisualInset();
+            var innerBounds = snapped.Deflate(new Thickness(borderInset));
+            return Math.Max(0, innerBounds.Height - Padding.VerticalThickness);
+        }
+
+        return _viewportHeight;
     }
 
     public void SetSelectedIndexBinding(
