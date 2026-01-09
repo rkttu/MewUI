@@ -48,7 +48,7 @@ public sealed class ProgressBar : Control
     {
         BorderThickness = 1;
         Padding = new Thickness(1);
-        Height = 18;
+        Height = 10;
     }
 
     public void SetValueBinding(
@@ -94,10 +94,9 @@ public sealed class ProgressBar : Control
         var fillRect = new Rect(contentBounds.X, contentBounds.Y, contentBounds.Width * t, contentBounds.Height);
         if (fillRect.Width > 0)
         {
-
             if (radius - 1 > 0)
             {
-                double rx = Math.Min(radius-1, fillRect.Width / 2.0);
+                double rx = Math.Min(radius - 1, fillRect.Width / 2.0);
                 context.FillRoundedRectangle(fillRect, rx, rx, theme.Accent);
             }
             else
