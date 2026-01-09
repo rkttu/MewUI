@@ -24,7 +24,7 @@
   > with each step reviewed and refined by the developer.
 
 ### Video
-https://raw.githubusercontent.com/aprillz/MewUI/main/assets/videos/MewUI.Demo_0.1.0.mp4
+https://github.com/user-attachments/assets/876c1450-de36-4ccf-9cf8-b47f035a300f
 
 ### Screenshots
 
@@ -150,10 +150,11 @@ var label  = new Label().BindText(percent, v => $"Percent ({v:P0})");
 ## 🧱 Controls / Panels
 
 Controls:
-- `Label`, `Button`, `TextBox`
+- `Label`, `Button`, `TextBox`, `MultiLineTextBox`
 - `CheckBox`, `RadioButton`
 - `ListBox`, `ComboBox`
 - `Slider`, `ProgressBar`
+- `ScrollBar`, `ScrollViewer`
 - `Window`
 
 Panels:
@@ -207,7 +208,6 @@ Currently implemented:
 - [ ] `Image`
 - [ ] `GroupBox`
 - [ ] `TabControl`
-- [ ] `ScrollViewer`
 
 **Rendering**
 - [ ] Better text shaping (HarfBuzz)

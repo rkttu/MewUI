@@ -24,7 +24,7 @@
   > 각 단계는 개발자가 검토하고 조정하는 방식으로 진행되었습니다.
  
 ### 비디오
-https://raw.githubusercontent.com/aprillz/MewUI/main/assets/videos/MewUI.Demo_0.1.0.mp4
+https://github.com/user-attachments/assets/876c1450-de36-4ccf-9cf8-b47f035a300f
 
 ### 스크린샷
 
@@ -152,10 +152,11 @@ var label  = new Label()
 ## 🧱 컨트롤 / 패널
 
 컨트롤:
-- `Label`, `Button`, `TextBox`
+- `Label`, `Button`, `TextBox`, `MultiLineTextBox`
 - `CheckBox`, `RadioButton`
 - `ListBox`, `ComboBox`
 - `Slider`, `ProgressBar`
+- `ScrollBar`, `ScrollViewer`
 - `Window`
 
 패널:
@@ -209,7 +210,6 @@ Theme.Current = Theme.Current.WithAccent(Color.FromRgb(214, 176, 82));
 - [ ] `Image`
 - [ ] `GroupBox`
 - [ ] `TabControl`
-- [ ] `ScrollViewer`
 
 **렌더링**
 - [ ] 폰트 셰이핑(HarfBuzz)
