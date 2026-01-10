@@ -1,96 +1,100 @@
 using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Binding;
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
-public class RadioButton : Control
+public class RadioButton : ToggleBase
 {
     private bool _isPressed;
-    private bool _isChecked;
-    private ValueBinding<bool>? _checkedBinding;
-    private bool _updatingFromSource;
-
-    public string Text
-    {
-        get;
-        set { field = value ?? string.Empty; InvalidateMeasure(); }
-    } = string.Empty;
+    private Window? _registeredWindow;
+    private string? _registeredGroupName;
+    private Elements.Element? _registeredParentScope;
 
     public string? GroupName
     {
         get;
-        set { field = value; InvalidateVisual(); }
-    }
-
-    public bool IsChecked
-    {
-        get => _isChecked;
         set
         {
-            if (_isChecked == value)
+            if (field == value)
                 return;
 
-            SetChecked(value, notifyGroup: value);
+            field = value;
+            InvalidateVisual();
+
+            if (IsChecked)
+            {
+                UnregisterFromGroup();
+                RegisterToGroup();
+            }
         }
     }
 
-    public Action<bool>? CheckedChanged { get; set; }
-
-    public override bool Focusable => true;
-
-    protected override Color DefaultBorderBrush => Theme.Current.ControlBorder;
-
     public RadioButton()
     {
-        Background = Color.Transparent;
         BorderThickness = 1;
         Padding = new Thickness(2);
     }
 
-    private void SetChecked(bool value, bool notifyGroup)
+    protected override void OnIsCheckedChanged(bool value)
     {
-        _isChecked = value;
-        CheckedChanged?.Invoke(value);
-        InvalidateVisual();
-
-        if (value && notifyGroup)
-            UncheckOtherRadiosInGroup();
+        if (value)
+            RegisterToGroup();
+        else
+            UnregisterFromGroup();
     }
 
-    private void UncheckOtherRadiosInGroup()
+    protected override void ToggleFromKeyboard()
+    {
+        IsChecked = true;
+    }
+
+    protected override void OnParentChanged()
+    {
+        base.OnParentChanged();
+
+        if (IsChecked && string.IsNullOrWhiteSpace(GroupName))
+        {
+            UnregisterFromGroup();
+            RegisterToGroup();
+        }
+    }
+
+    private void RegisterToGroup()
     {
         var root = FindVisualRoot();
-        if (root is not Window window || window.Content == null)
+        if (root is not Window window)
             return;
 
         string? group = string.IsNullOrWhiteSpace(GroupName) ? null : GroupName;
-        var parent = Parent;
+        var parentScope = group == null ? Parent : null;
+        if (group == null && parentScope == null)
+            return;
 
-        Elements.VisualTree.Visit(window.Content, element =>
-        {
-            if (element == this)
-                return;
+        if (_registeredWindow == window &&
+            string.Equals(_registeredGroupName, group, StringComparison.Ordinal) &&
+            _registeredParentScope == parentScope)
+            return;
 
-            if (element is not RadioButton rb)
-                return;
+        UnregisterFromGroup();
 
-            if (!rb._isChecked)
-                return;
+        window.RadioGroupChecked(this, group, parentScope);
+        _registeredWindow = window;
+        _registeredGroupName = group;
+        _registeredParentScope = parentScope;
+    }
 
-            if (group != null)
-            {
-                if (string.Equals(rb.GroupName, group, StringComparison.Ordinal))
-                    rb.SetChecked(false, notifyGroup: false);
-            }
-            else
-            {
-                if (rb.Parent == parent && string.IsNullOrWhiteSpace(rb.GroupName))
-                    rb.SetChecked(false, notifyGroup: false);
-            }
-        });
+    private void UnregisterFromGroup()
+    {
+        var window = _registeredWindow;
+        if (window == null)
+            return;
+
+        window.RadioGroupUnchecked(this, _registeredGroupName, _registeredParentScope);
+        _registeredWindow = null;
+        _registeredGroupName = null;
+        _registeredParentScope = null;
     }
 
     protected override Size MeasureContent(Size availableSize)
@@ -117,6 +121,7 @@ public class RadioButton : Control
         var theme = GetTheme();
         var bounds = Bounds;
         var contentBounds = bounds.Deflate(Padding);
+        var state = GetVisualState(isPressed: _isPressed, isActive: _isPressed);
 
         const double boxSize = 14;
         const double spacing = 6;
@@ -124,17 +129,10 @@ public class RadioButton : Control
         double boxY = contentBounds.Y + (contentBounds.Height - boxSize) / 2;
         var circleRect = new Rect(contentBounds.X, boxY, boxSize, boxSize);
 
-        var fill = IsEnabled ? theme.ControlBackground : theme.TextBoxDisabledBackground;
+        var fill = state.IsEnabled ? theme.ControlBackground : theme.TextBoxDisabledBackground;
         context.FillEllipse(circleRect, fill);
 
-        var borderColor = BorderBrush;
-        if (IsEnabled)
-        {
-            if (IsFocused || _isPressed)
-                borderColor = theme.Accent;
-            else if (IsMouseOver)
-                borderColor = BorderBrush.Lerp(theme.Accent, 0.6);
-        }
+        var borderColor = PickAccentBorder(theme, BorderBrush, state, hoverMix: 0.6);
         context.DrawEllipse(circleRect, borderColor, Math.Max(1, BorderThickness));
 
         if (IsChecked)
@@ -146,7 +144,7 @@ public class RadioButton : Control
         if (!string.IsNullOrEmpty(Text))
         {
             var font = GetFont();
-            var textColor = IsEnabled ? Foreground : theme.DisabledText;
+            var textColor = state.IsEnabled ? Foreground : theme.DisabledText;
             var textBounds = new Rect(contentBounds.X + boxSize + spacing, contentBounds.Y, contentBounds.Width - boxSize - spacing, contentBounds.Height);
             context.DrawText(Text, textBounds, font, textColor, TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
         }
@@ -190,61 +188,4 @@ public class RadioButton : Control
         e.Handled = true;
     }
 
-    protected override void OnKeyUp(KeyEventArgs e)
-    {
-        base.OnKeyUp(e);
-
-        if (!IsEnabled)
-            return;
-
-        if (e.Key == Input.Key.Space)
-        {
-            IsChecked = true;
-            e.Handled = true;
-        }
-    }
-
-    public void SetIsCheckedBinding(
-        Func<bool> get,
-        Action<bool> set,
-        Action<Action>? subscribe = null,
-        Action<Action>? unsubscribe = null)
-    {
-        if (get == null) throw new ArgumentNullException(nameof(get));
-        if (set == null) throw new ArgumentNullException(nameof(set));
-
-        _checkedBinding?.Dispose();
-        _checkedBinding = new ValueBinding<bool>(
-            get,
-            set,
-            subscribe,
-            unsubscribe,
-            onSourceChanged: () =>
-            {
-                _updatingFromSource = true;
-                try { IsChecked = get(); }
-                finally { _updatingFromSource = false; }
-            });
-
-        var existing = CheckedChanged;
-        CheckedChanged = v =>
-        {
-            existing?.Invoke(v);
-
-            if (_updatingFromSource)
-                return;
-
-            _checkedBinding?.Set(v);
-        };
-
-        _updatingFromSource = true;
-        try { IsChecked = get(); }
-        finally { _updatingFromSource = false; }
-    }
-
-    protected override void OnDispose()
-    {
-        _checkedBinding?.Dispose();
-        _checkedBinding = null;
-    }
 }

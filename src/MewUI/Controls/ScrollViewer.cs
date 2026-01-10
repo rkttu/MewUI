@@ -28,7 +28,7 @@ public sealed class ScrollViewer : Control
         get;
         set
         {
-            if (ReferenceEquals(field, value))
+            if (field == value)
                 return;
 
             if (field != null)

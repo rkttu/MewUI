@@ -220,21 +220,21 @@ public sealed class ComboBox : Control, IPopupOwner
         if (!IsEnabled)
             return;
 
-        if (e.Key == Input.Key.Space || e.Key == Input.Key.Enter)
+        if (e.Key == Key.Space || e.Key == Key.Enter)
         {
             IsDropDownOpen = !IsDropDownOpen;
             e.Handled = true;
             return;
         }
 
-        if (e.Key == Input.Key.Escape && IsDropDownOpen)
+        if (e.Key == Key.Escape && IsDropDownOpen)
         {
             IsDropDownOpen = false;
             e.Handled = true;
             return;
         }
 
-        if (e.Key == Input.Key.Down)
+        if (e.Key == Key.Down)
         {
             if (!IsDropDownOpen)
                 IsDropDownOpen = true;
@@ -247,7 +247,7 @@ public sealed class ComboBox : Control, IPopupOwner
 
             e.Handled = true;
         }
-        else if (e.Key == Input.Key.Up)
+        else if (e.Key == Key.Up)
         {
             if (!IsDropDownOpen)
                 IsDropDownOpen = true;

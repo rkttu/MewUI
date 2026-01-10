@@ -18,6 +18,7 @@ public class Window : ContentControl
     private Size _clientSizeDip = Size.Empty;
     private Size _lastLayoutClientSizeDip = Size.Empty;
     private readonly List<PopupEntry> _popups = new();
+    private readonly RadioGroupManager _radioGroups = new();
     private bool _firstFrameRenderedRaised;
 
     private sealed class PopupEntry
@@ -26,6 +27,69 @@ public class Window : ContentControl
         public required UIElement Owner { get; init; }
         public Rect Bounds { get; set; }
     }
+
+    private sealed class RadioGroupManager
+    {
+        private readonly Dictionary<string, WeakReference<RadioButton>> _namedSelected = new(StringComparer.Ordinal);
+        private readonly Dictionary<Element, WeakReference<RadioButton>> _unnamedSelected = new();
+
+        public void Checked(RadioButton source, string? groupName, Element? parentScope)
+        {
+            if (groupName != null)
+            {
+                _namedSelected.TryGetValue(groupName, out var existingRef);
+                var existing = TryGet(existingRef);
+
+                _namedSelected[groupName] = new WeakReference<RadioButton>(source);
+
+                if (existing != null && existing != source && existing.IsChecked)
+                    existing.IsChecked = false;
+                return;
+            }
+
+            if (parentScope == null)
+                return;
+
+            _unnamedSelected.TryGetValue(parentScope, out var existingScopeRef);
+            var existingScope = TryGet(existingScopeRef);
+
+            _unnamedSelected[parentScope] = new WeakReference<RadioButton>(source);
+
+            if (existingScope != null && existingScope != source && existingScope.IsChecked)
+                existingScope.IsChecked = false;
+        }
+
+        public void Unchecked(RadioButton source, string? groupName, Element? parentScope)
+        {
+            if (groupName != null)
+            {
+                if (_namedSelected.TryGetValue(groupName, out var existingRef) &&
+                    TryGet(existingRef) == source)
+                    _namedSelected.Remove(groupName);
+                return;
+            }
+
+            if (parentScope == null)
+                return;
+
+            if (_unnamedSelected.TryGetValue(parentScope, out var scopeRef) &&
+                TryGet(scopeRef) == source)
+                _unnamedSelected.Remove(parentScope);
+        }
+
+        private static RadioButton? TryGet(WeakReference<RadioButton>? weak)
+        {
+            if (weak == null)
+                return null;
+            return weak.TryGetTarget(out var value) ? value : null;
+        }
+    }
+
+    internal void RadioGroupChecked(RadioButton source, string? groupName, Element? parentScope)
+        => _radioGroups.Checked(source, groupName, parentScope);
+
+    internal void RadioGroupUnchecked(RadioButton source, string? groupName, Element? parentScope)
+        => _radioGroups.Unchecked(source, groupName, parentScope);
 
     public nint Handle => _backend?.Handle ?? 0;
 
@@ -289,7 +353,7 @@ public class Window : ContentControl
             return;
         }
 
-        Elements.VisualTree.Visit(Content, element =>
+        VisualTree.Visit(Content, element =>
         {
             if (element is IDisposable disposable)
                 disposable.Dispose();

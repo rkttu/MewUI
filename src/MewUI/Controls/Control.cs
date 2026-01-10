@@ -239,6 +239,59 @@ public abstract class Control : FrameworkElement, IDisposable
         return Theme.Current;
     }
 
+    protected readonly struct VisualState
+    {
+        public bool IsEnabled { get; }
+        public bool IsHot { get; }
+        public bool IsFocused { get; }
+        public bool IsPressed { get; }
+        public bool IsActive { get; }
+
+        public VisualState(bool isEnabled, bool isHot, bool isFocused, bool isPressed, bool isActive)
+        {
+            IsEnabled = isEnabled;
+            IsHot = isHot;
+            IsFocused = isFocused;
+            IsPressed = isPressed;
+            IsActive = isActive;
+        }
+    }
+
+    protected VisualState GetVisualState(bool isPressed = false, bool isActive = false)
+    {
+        var enabled = IsEffectivelyEnabled;
+        var hot = enabled && (IsMouseOver || IsMouseCaptured);
+        var focused = enabled && IsFocused;
+        var pressed = enabled && isPressed;
+        var active = enabled && isActive;
+        return new VisualState(enabled, hot, focused, pressed, active);
+    }
+
+    protected Color PickAccentBorder(Theme theme, Color baseBorder, in VisualState state, double hoverMix = 0.6)
+    {
+        if (!state.IsEnabled)
+            return baseBorder;
+        if (state.IsFocused || state.IsActive || state.IsPressed)
+            return theme.Accent;
+        if (state.IsHot)
+            return baseBorder.Lerp(theme.Accent, hoverMix);
+        return baseBorder;
+    }
+
+    protected void DrawFocusGlow(IGraphicsContext context, Rect bounds, double radiusDip, double thicknessDip, byte alpha = 0x44, double expandDip = 1)
+    {
+        var theme = GetTheme();
+        var outer = bounds.Inflate(expandDip, expandDip);
+        var dpiScale = GetDpi() / 96.0;
+        var radius = radiusDip <= 0 ? 0 : LayoutRounding.RoundToPixel(radiusDip + expandDip, dpiScale);
+        var stroke = thicknessDip <= 0 ? 1 : LayoutRounding.SnapThicknessToPixels(thicknessDip, dpiScale, minPixels: 1) + 2;
+        outer = GetSnappedBorderBounds(outer);
+        if (radius > 0)
+            context.DrawRoundedRectangle(outer, radius, radius, theme.Accent.WithAlpha(alpha), stroke);
+        else
+            context.DrawRectangle(outer, theme.Accent.WithAlpha(alpha), stroke);
+    }
+
     /// <summary>
     /// Gets the graphics factory from the owning window, or the default factory.
     /// </summary>

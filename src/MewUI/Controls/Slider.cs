@@ -6,42 +6,10 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
-public sealed class Slider : Control
+public sealed class Slider : RangeBase
 {
     private bool _isDragging;
     private ValueBinding<double>? _valueBinding;
-
-    public double Minimum
-    {
-        get;
-        set { field = value; InvalidateVisual(); }
-    }
-
-    public double Maximum
-    {
-        get;
-        set { field = value; InvalidateVisual(); }
-    } = 100;
-
-    public double Value
-    {
-        get;
-        set
-        {
-            if (double.IsNaN(value) || double.IsInfinity(value))
-                value = 0;
-
-            double clamped = ClampToRange(value);
-            if (field.Equals(clamped))
-                return;
-
-            field = clamped;
-            ValueChanged?.Invoke(field);
-            InvalidateVisual();
-        }
-    }
-
-    public Action<double>? ValueChanged { get; set; }
 
     public double SmallChange { get; set; } = 1;
 
@@ -49,6 +17,7 @@ public sealed class Slider : Control
 
     public Slider()
     {
+        Maximum = 100;
         Background = Color.Transparent;
         BorderThickness = 1;
         Height = 24;
@@ -70,10 +39,10 @@ public sealed class Slider : Control
             {
                 if (_isDragging)
                     return;
-                Value = get();
+                SetValueFromSource(get());
             });
 
-        Value = get();
+        SetValueFromSource(get());
     }
 
     protected override Size MeasureContent(Size availableSize) => new Size(160, Height);
@@ -83,7 +52,7 @@ public sealed class Slider : Control
         var theme = GetTheme();
 
         if (_valueBinding != null && !_isDragging)
-            Value = _valueBinding.Get();
+            SetValueFromSource(_valueBinding.Get());
 
         var bounds = Bounds;
         var contentBounds = bounds.Deflate(Padding);
@@ -184,12 +153,12 @@ public sealed class Slider : Control
         if (!IsEnabled)
             return;
 
-        if (e.Key == Input.Key.Left)
+        if (e.Key == Key.Left)
         {
             SetValueInternal(Value - SmallChange, fromUser: true);
             e.Handled = true;
         }
-        else if (e.Key == Input.Key.Right)
+        else if (e.Key == Key.Right)
         {
             SetValueInternal(Value + SmallChange, fromUser: true);
             e.Handled = true;
@@ -213,26 +182,10 @@ public sealed class Slider : Control
         if (Value.Equals(clamped))
             return;
 
-        // Update backing field without re-entering ValueChanged twice.
         Value = clamped;
 
         if (fromUser && _valueBinding != null)
             _valueBinding.Set(clamped);
-    }
-
-    private double GetNormalizedValue()
-    {
-        double range = Maximum - Minimum;
-        if (range <= 0)
-            return 0;
-        return Math.Clamp((Value - Minimum) / range, 0, 1);
-    }
-
-    private double ClampToRange(double value)
-    {
-        double min = Math.Min(Minimum, Maximum);
-        double max = Math.Max(Minimum, Maximum);
-        return Math.Clamp(value, min, max);
     }
 
     protected override void OnDispose()

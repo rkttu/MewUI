@@ -1,46 +1,16 @@
 using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Binding;
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
-public class CheckBox : Control
+public class CheckBox : ToggleBase
 {
     private bool _isPressed;
-    private ValueBinding<bool>? _checkedBinding;
-    private bool _updatingFromSource;
-
-    public string Text
-    {
-        get;
-        set { field = value ?? string.Empty; InvalidateMeasure(); }
-    } = string.Empty;
-
-    public bool IsChecked
-    {
-        get;
-        set
-        {
-            if (field == value)
-                return;
-
-            field = value;
-            CheckedChanged?.Invoke(value);
-            InvalidateVisual();
-        }
-    }
-
-    public Action<bool>? CheckedChanged { get; set; }
-
-    public override bool Focusable => true;
-
-    protected override Color DefaultBorderBrush => Theme.Current.ControlBorder;
 
     public CheckBox()
     {
-        Background = Color.Transparent;
         BorderThickness = 1;
         Padding = new Thickness(2);
     }
@@ -69,6 +39,7 @@ public class CheckBox : Control
         var theme = GetTheme();
         var bounds = Bounds;
         var contentBounds = bounds.Deflate(Padding);
+        var state = GetVisualState(isPressed: _isPressed, isActive: _isPressed);
 
         const double boxSize = 14;
         const double spacing = 6;
@@ -76,21 +47,14 @@ public class CheckBox : Control
         double boxY = contentBounds.Y + (contentBounds.Height - boxSize) / 2;
         var boxRect = new Rect(contentBounds.X, boxY, boxSize, boxSize);
 
-        var fill = IsEnabled ? theme.ControlBackground : theme.TextBoxDisabledBackground;
+        var fill = state.IsEnabled ? theme.ControlBackground : theme.TextBoxDisabledBackground;
         var radius = Math.Max(0, theme.ControlCornerRadius * 0.5);
         if (radius > 0)
             context.FillRoundedRectangle(boxRect, radius, radius, fill);
         else
             context.FillRectangle(boxRect, fill);
 
-        var borderColor = BorderBrush;
-        if (IsEnabled)
-        {
-            if (IsFocused || _isPressed)
-                borderColor = theme.Accent;
-            else if (IsMouseOver)
-                borderColor = BorderBrush.Lerp(theme.Accent, 0.6);
-        }
+        var borderColor = PickAccentBorder(theme, BorderBrush, state, hoverMix: 0.6);
         var stroke = Math.Max(1, BorderThickness);
         if (radius > 0)
             context.DrawRoundedRectangle(boxRect, radius, radius, borderColor, stroke);
@@ -110,7 +74,7 @@ public class CheckBox : Control
         if (!string.IsNullOrEmpty(Text))
         {
             var font = GetFont();
-            var textColor = IsEnabled ? Foreground : theme.DisabledText;
+            var textColor = state.IsEnabled ? Foreground : theme.DisabledText;
             var textBounds = new Rect(contentBounds.X + boxSize + spacing, contentBounds.Y, contentBounds.Width - boxSize - spacing, contentBounds.Height);
             context.DrawText(Text, textBounds, font, textColor, TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
         }
@@ -158,57 +122,6 @@ public class CheckBox : Control
     {
         base.OnKeyUp(e);
 
-        if (!IsEnabled)
-            return;
-
-        if (e.Key == Input.Key.Space)
-        {
-            IsChecked = !IsChecked;
-            e.Handled = true;
-        }
-    }
-
-    public void SetIsCheckedBinding(
-        Func<bool> get,
-        Action<bool> set,
-        Action<Action>? subscribe = null,
-        Action<Action>? unsubscribe = null)
-    {
-        if (get == null) throw new ArgumentNullException(nameof(get));
-        if (set == null) throw new ArgumentNullException(nameof(set));
-
-        _checkedBinding?.Dispose();
-        _checkedBinding = new ValueBinding<bool>(
-            get,
-            set,
-            subscribe,
-            unsubscribe,
-            onSourceChanged: () =>
-            {
-                _updatingFromSource = true;
-                try { IsChecked = get(); }
-                finally { _updatingFromSource = false; }
-            });
-
-        var existing = CheckedChanged;
-        CheckedChanged = v =>
-        {
-            existing?.Invoke(v);
-
-            if (_updatingFromSource)
-                return;
-
-            _checkedBinding?.Set(v);
-        };
-
-        _updatingFromSource = true;
-        try { IsChecked = get(); }
-        finally { _updatingFromSource = false; }
-    }
-
-    protected override void OnDispose()
-    {
-        _checkedBinding?.Dispose();
-        _checkedBinding = null;
+        // Space handled by ToggleBase
     }
 }

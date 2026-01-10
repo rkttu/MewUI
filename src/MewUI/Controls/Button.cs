@@ -71,34 +71,28 @@ public class Button : Control
         var theme = GetTheme();
         var bounds = GetSnappedBorderBounds(Bounds);
         double radius = theme.ControlCornerRadius;
+        var state = GetVisualState(isPressed: _isPressed, isActive: _isPressed);
 
         // Determine visual state
         Color bgColor;
-        Color borderColor;
+        Color borderColor = PickAccentBorder(theme, BorderBrush, state, hoverMix: 0.6);
 
-        if (!IsEnabled)
+        if (!state.IsEnabled)
         {
             bgColor = theme.ButtonDisabledBackground;
-            borderColor = BorderBrush;
         }
-        else if (_isPressed)
+        else if (state.IsPressed)
         {
             bgColor = theme.ButtonPressedBackground;
-            borderColor = theme.Accent;
         }
-        else if (IsMouseOver)
+        else if (state.IsHot)
         {
             bgColor = theme.ButtonHoverBackground;
-            borderColor = BorderBrush.Lerp(theme.Accent, 0.6);
         }
         else
         {
             bgColor = Background;
-            borderColor = BorderBrush;
         }
-
-        if (IsEnabled && IsFocused)
-            borderColor = theme.Accent;
 
         DrawBackgroundAndBorder(context, bounds, bgColor, borderColor, radius);
 
@@ -107,7 +101,7 @@ public class Button : Control
         {
             var contentBounds = bounds.Deflate(Padding).Deflate(new Thickness(GetBorderVisualInset()));
             var font = GetFont();
-            var textColor = IsEnabled ? Foreground : theme.DisabledText;
+            var textColor = state.IsEnabled ? Foreground : theme.DisabledText;
 
             context.DrawText(Content, contentBounds, font, textColor,
                 TextAlignment.Center, TextAlignment.Center, TextWrapping.NoWrap);
@@ -172,7 +166,7 @@ public class Button : Control
         base.OnKeyDown(e);
 
         // Space or Enter triggers click
-        if ((e.Key == Input.Key.Space || e.Key == Input.Key.Enter) && IsEffectivelyEnabled)
+        if ((e.Key == Key.Space || e.Key == Key.Enter) && IsEffectivelyEnabled)
         {
             _isPressed = true;
             InvalidateVisual();
@@ -184,7 +178,7 @@ public class Button : Control
     {
         base.OnKeyUp(e);
 
-        if ((e.Key == Input.Key.Space || e.Key == Input.Key.Enter) && _isPressed)
+        if ((e.Key == Key.Space || e.Key == Key.Enter) && _isPressed)
         {
             _isPressed = false;
             if (IsEffectivelyEnabled)

@@ -1,5 +1,4 @@
 using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Binding;
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
@@ -9,13 +8,9 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A single-line text input control.
 /// </summary>
-public class TextBox : Control
+public class TextBox : TextBase
 {
-    private int _selectionStart;
-    private int _selectionLength;
     private double _scrollOffset;
-    private ValueBinding<string>? _textBinding;
-    private bool _suppressBindingSet;
     private bool _suppressTextInputTab;
 
     protected override Color DefaultBackground => Theme.Current.ControlBackground;
@@ -27,61 +22,16 @@ public class TextBox : Control
         Padding = new Thickness(4);
     }
 
-    /// <summary>
-    /// Gets or sets the text content.
-    /// </summary>
-    public string Text
+    protected override string NormalizeText(string text)
     {
-        get;
-        set
-        {
-            if (field != value)
-            {
-                field = value ?? string.Empty;
-                CaretPosition = Math.Min(CaretPosition, Text.Length);
-                _selectionStart = 0;
-                _selectionLength = 0;
-                TextChanged?.Invoke(Text);
-                InvalidateVisual();
-            }
-        }
-    } = string.Empty;
+        if (text.Length == 0)
+            return string.Empty;
 
-    /// <summary>
-    /// Gets or sets the placeholder text shown when empty.
-    /// </summary>
-    public string Placeholder
-    {
-        get;
-        set { field = value ?? string.Empty; InvalidateVisual(); }
-    } = string.Empty;
-
-    /// <summary>
-    /// Gets or sets whether the text box is read-only.
-    /// </summary>
-    public bool IsReadOnly
-    {
-        get;
-        set { field = value; InvalidateVisual(); }
+        text = text.Replace("\r\n", string.Empty).Replace("\r", string.Empty).Replace("\n", string.Empty);
+        if (!AcceptTab && text.Contains('\t'))
+            text = text.Replace("\t", string.Empty);
+        return text;
     }
-
-    public bool AcceptTab { get; set; }
-
-    /// <summary>
-    /// Gets or sets the caret position.
-    /// </summary>
-    public int CaretPosition
-    {
-        get;
-        set { field = Math.Clamp(value, 0, Text.Length); InvalidateVisual(); }
-    }
-
-    /// <summary>
-    /// Text changed event (AOT-compatible).
-    /// </summary>
-    public Action<string>? TextChanged { get; set; }
-
-    public override bool Focusable => true;
 
     protected override Size MeasureContent(Size availableSize)
     {
@@ -98,19 +48,13 @@ public class TextBox : Control
         var contentBounds = bounds.Deflate(Padding).Deflate(new Thickness(borderInset));
         double radius = theme.ControlCornerRadius;
 
-        var borderColor = BorderBrush;
-        if (IsEnabled)
-        {
-            if (IsFocused)
-                borderColor = theme.Accent;
-            else if (IsMouseOver)
-                borderColor = BorderBrush.Lerp(theme.Accent, 0.6);
-        }
+        var state = GetVisualState();
+        var borderColor = PickAccentBorder(theme, BorderBrush, state, hoverMix: 0.6);
 
         DrawBackgroundAndBorder(
             context,
             bounds,
-            IsEnabled ? Background : theme.TextBoxDisabledBackground,
+            state.IsEnabled ? Background : theme.TextBoxDisabledBackground,
             borderColor,
             radius);
 
@@ -121,7 +65,7 @@ public class TextBox : Control
         var font = GetFont();
 
         // Draw placeholder or text
-        if (string.IsNullOrEmpty(Text) && !string.IsNullOrEmpty(Placeholder) && !IsFocused)
+        if (string.IsNullOrEmpty(Text) && !string.IsNullOrEmpty(Placeholder) && !state.IsFocused)
         {
             context.DrawText(Placeholder, contentBounds, font, theme.PlaceholderText,
                 TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
@@ -149,14 +93,14 @@ public class TextBox : Control
             }
 
             // Draw text
-            var textColor = IsEnabled ? Foreground : theme.DisabledText;
+            var textColor = state.IsEnabled ? Foreground : theme.DisabledText;
             // Use backend vertical centering (font metrics differ from FontSize across renderers).
             context.DrawText(Text, new Rect(textX, contentBounds.Y, 1_000_000, contentBounds.Height), font, textColor,
                 TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
         }
 
         // Draw caret if focused
-        if (IsFocused && !IsReadOnly)
+        if (state.IsFocused && !IsReadOnly)
         {
             var caretX = contentBounds.X - _scrollOffset;
             if (CaretPosition > 0)
@@ -255,65 +199,64 @@ public class TextBox : Control
 
         switch (e.Key)
         {
-            case Input.Key.Tab:
+            case Key.Tab:
                 if (!IsReadOnly && AcceptTab)
                 {
                     DeleteSelection();
                     Text = Text.Insert(CaretPosition, "\t");
                     CaretPosition += 1;
-                    TextChanged?.Invoke(Text);
                     _suppressTextInputTab = true;
                     EnsureCaretVisible();
                     e.Handled = true;
                 }
                 break;
 
-            case Input.Key.Left:
+            case Key.Left:
                 MoveCaret(-1, shift, ctrl);
                 e.Handled = true;
                 break;
 
-            case Input.Key.Right:
+            case Key.Right:
                 MoveCaret(1, shift, ctrl);
                 e.Handled = true;
                 break;
 
-            case Input.Key.Home:
+            case Key.Home:
                 MoveCaret(-Text.Length, shift, false);
                 e.Handled = true;
                 break;
 
-            case Input.Key.End:
+            case Key.End:
                 MoveCaret(Text.Length, shift, false);
                 e.Handled = true;
                 break;
 
-            case Input.Key.Backspace:
+            case Key.Backspace:
                 if (!IsReadOnly) HandleBackspace(ctrl);
                 e.Handled = true;
                 break;
 
-            case Input.Key.Delete:
+            case Key.Delete:
                 if (!IsReadOnly) HandleDelete(ctrl);
                 e.Handled = true;
                 break;
 
-            case Input.Key.A when ctrl:
+            case Key.A when ctrl:
                 SelectAll();
                 e.Handled = true;
                 break;
 
-            case Input.Key.C when ctrl:
+            case Key.C when ctrl:
                 CopyToClipboard();
                 e.Handled = true;
                 break;
 
-            case Input.Key.X when ctrl:
+            case Key.X when ctrl:
                 if (!IsReadOnly) CutToClipboard();
                 e.Handled = true;
                 break;
 
-            case Input.Key.V when ctrl:
+            case Key.V when ctrl:
                 if (!IsReadOnly) PasteFromClipboard();
                 e.Handled = true;
                 break;
@@ -354,7 +297,6 @@ public class TextBox : Control
         // Insert text
         Text = Text.Insert(CaretPosition, text);
         CaretPosition += text.Length;
-        TextChanged?.Invoke(Text);
 
         EnsureCaretVisible();
         InvalidateVisual();
@@ -461,7 +403,6 @@ public class TextBox : Control
             int deleteFrom = word ? FindPreviousWordBoundary(CaretPosition) : CaretPosition - 1;
             Text = Text.Remove(deleteFrom, CaretPosition - deleteFrom);
             CaretPosition = deleteFrom;
-            TextChanged?.Invoke(Text);
         }
     }
 
@@ -475,7 +416,6 @@ public class TextBox : Control
         {
             int deleteTo = word ? FindNextWordBoundary(CaretPosition) : CaretPosition + 1;
             Text = Text.Remove(CaretPosition, deleteTo - CaretPosition);
-            TextChanged?.Invoke(Text);
         }
     }
 
@@ -490,7 +430,6 @@ public class TextBox : Control
         CaretPosition = start;
         _selectionStart = start;
         _selectionLength = 0;
-        TextChanged?.Invoke(Text);
     }
 
     private void SelectAll()
@@ -530,7 +469,6 @@ public class TextBox : Control
         DeleteSelection();
         Text = Text.Insert(CaretPosition, text);
         CaretPosition += text.Length;
-        TextChanged?.Invoke(Text);
     }
 
     private void EnsureCaretVisible()
@@ -581,70 +519,22 @@ public class TextBox : Control
     }
 
     private static bool IsNavigationKey(Input.Key key) =>
-        key is Input.Key.Left or
-               Input.Key.Right or
-               Input.Key.Home or
-               Input.Key.End;
+        key is Key.Left or
+               Key.Right or
+               Key.Home or
+               Key.End;
 
     private static void SetClipboardText(string text)
     {
-        if (!Core.Application.IsRunning)
+        if (!Application.IsRunning)
             return;
-        Core.Application.Current.PlatformHost.Clipboard.TrySetText(text ?? string.Empty);
+        Application.Current.PlatformHost.Clipboard.TrySetText(text ?? string.Empty);
     }
 
     private static string GetClipboardText()
     {
-        if (!Core.Application.IsRunning)
+        if (!Application.IsRunning)
             return string.Empty;
-        return Core.Application.Current.PlatformHost.Clipboard.TryGetText(out var text) ? text : string.Empty;
-    }
-
-    public void SetTextBinding(
-        Func<string> get,
-        Action<string> set,
-        Action<Action>? subscribe = null,
-        Action<Action>? unsubscribe = null)
-    {
-        _textBinding?.Dispose();
-        _textBinding = new ValueBinding<string>(
-            get,
-            set,
-            subscribe,
-            unsubscribe,
-            onSourceChanged: () =>
-            {
-                if (IsFocused)
-                    return;
-
-                var value = get() ?? string.Empty;
-                if (Text == value)
-                    return;
-
-                _suppressBindingSet = true;
-                try { Text = value; }
-                finally { _suppressBindingSet = false; }
-            });
-
-        var existing = TextChanged;
-        TextChanged = text =>
-        {
-            existing?.Invoke(text);
-
-            if (_suppressBindingSet)
-                return;
-
-            _textBinding?.Set(text);
-        };
-
-        _suppressBindingSet = true;
-        try { Text = get() ?? string.Empty; }
-        finally { _suppressBindingSet = false; }
-    }
-
-    protected override void OnDispose()
-    {
-        _textBinding?.Dispose();
-        _textBinding = null;
+        return Application.Current.PlatformHost.Clipboard.TryGetText(out var text) ? text : string.Empty;
     }
 }

@@ -1,5 +1,4 @@
 using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Binding;
 using Aprillz.MewUI.Elements;
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Platform;
@@ -12,18 +11,14 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A multi-line text input control with thin scrollbars.
 /// </summary>
-public sealed class MultiLineTextBox : Control
+public sealed class MultiLineTextBox : TextBase
 {
-    private int _selectionStart;
-    private int _selectionLength;
     private double _verticalOffset;
     private double _horizontalOffset;
     private double _lineHeight;
     private readonly List<int> _lineStarts = new() { 0 };
     private bool _suppressTextInputNewline;
     private bool _suppressTextInputTab;
-    private ValueBinding<string>? _textBinding;
-    private bool _suppressBindingSet;
 
     private readonly ScrollBar _vBar;
     private readonly ScrollBar _hBar;
@@ -45,48 +40,20 @@ public sealed class MultiLineTextBox : Control
         _hBar.ValueChanged = v => { _horizontalOffset = v; InvalidateVisual(); };
     }
 
-    public string Text
+    protected override string NormalizeText(string text)
     {
-        get;
-        set
-        {
-            if (field == value)
-                return;
+        if (text.Length == 0)
+            return string.Empty;
 
-            field = NormalizeText(value ?? string.Empty);
-            CaretPosition = Math.Min(CaretPosition, field.Length);
-            _selectionStart = 0;
-            _selectionLength = 0;
-            RebuildLineStarts();
-            TextChanged?.Invoke(Text);
-            InvalidateMeasure();
-            InvalidateVisual();
-        }
-    } = string.Empty;
-
-    public string Placeholder
-    {
-        get;
-        set { field = value ?? string.Empty; InvalidateVisual(); }
-    } = string.Empty;
-
-    public bool IsReadOnly
-    {
-        get;
-        set { field = value; InvalidateVisual(); }
+        return text.Replace("\r\n", "\n").Replace('\r', '\n');
     }
 
-    public bool AcceptTab { get; set; }
-
-    public int CaretPosition
+    protected override void OnTextChanged(string oldText, string newText)
     {
-        get;
-        set { field = Math.Clamp(value, 0, Text.Length); InvalidateVisual(); }
+        RebuildLineStarts();
+        InvalidateMeasure();
+        InvalidateVisual();
     }
-
-    public Action<string>? TextChanged { get; set; }
-
-    public override bool Focusable => true;
 
     protected override Size MeasureContent(Size availableSize)
     {
@@ -855,63 +822,10 @@ public sealed class MultiLineTextBox : Control
         return context.MeasureText(Text.Substring(start, end - start), font).Width;
     }
 
-    private static string NormalizeText(string text)
-    {
-        if (text.Length == 0)
-            return string.Empty;
-
-        // Normalize Windows line endings and stray CR into '\n' to keep layout/caret math consistent.
-        text = text.Replace("\r\n", "\n").Replace('\r', '\n');
-        return text;
-    }
-
     protected override void OnDispose()
     {
-        _textBinding?.Dispose();
-        _textBinding = null;
+        base.OnDispose();
         _vBar.Dispose();
         _hBar.Dispose();
-    }
-
-    public void SetTextBinding(
-        Func<string> get,
-        Action<string> set,
-        Action<Action>? subscribe = null,
-        Action<Action>? unsubscribe = null)
-    {
-        _textBinding?.Dispose();
-        _textBinding = new ValueBinding<string>(
-            get,
-            set,
-            subscribe,
-            unsubscribe,
-            onSourceChanged: () =>
-            {
-                if (IsFocused)
-                    return;
-
-                var value = NormalizeText(get() ?? string.Empty);
-                if (Text == value)
-                    return;
-
-                _suppressBindingSet = true;
-                try { Text = value; }
-                finally { _suppressBindingSet = false; }
-            });
-
-        var existing = TextChanged;
-        TextChanged = text =>
-        {
-            existing?.Invoke(text);
-
-            if (_suppressBindingSet)
-                return;
-
-            _textBinding?.Set(text);
-        };
-
-        _suppressBindingSet = true;
-        try { Text = NormalizeText(get() ?? string.Empty); }
-        finally { _suppressBindingSet = false; }
     }
 }

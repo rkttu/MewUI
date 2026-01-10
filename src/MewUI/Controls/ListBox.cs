@@ -88,7 +88,7 @@ public class ListBox : Control
 
         // Fast path: when stretching horizontally, the parent is going to size us by slot width anyway.
         // Avoid scanning huge item lists just to compute a content-based desired width.
-        if (HorizontalAlignment == Elements.HorizontalAlignment.Stretch && !double.IsPositiveInfinity(widthLimit))
+        if (HorizontalAlignment == HorizontalAlignment.Stretch && !double.IsPositiveInfinity(widthLimit))
         {
             maxWidth = widthLimit;
         }
@@ -345,13 +345,13 @@ public class ListBox : Control
         if (!IsEnabled)
             return;
 
-        if (e.Key == Input.Key.Up)
+        if (e.Key == Key.Up)
         {
             if (_items.Count > 0)
                 SelectedIndex = Math.Max(0, SelectedIndex <= 0 ? 0 : SelectedIndex - 1);
             e.Handled = true;
         }
-        else if (e.Key == Input.Key.Down)
+        else if (e.Key == Key.Down)
         {
             if (_items.Count > 0)
                 SelectedIndex = Math.Min(_items.Count - 1, SelectedIndex < 0 ? 0 : SelectedIndex + 1);

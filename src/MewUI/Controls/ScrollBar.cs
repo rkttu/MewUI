@@ -6,7 +6,7 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
-public sealed class ScrollBar : Control
+public sealed class ScrollBar : RangeBase
 {
     private bool _dragging;
     private double _dragStartPos;
@@ -18,44 +18,15 @@ public sealed class ScrollBar : Control
         set { field = value; InvalidateMeasure(); InvalidateVisual(); }
     } = Orientation.Vertical;
 
-    public double Minimum
-    {
-        get;
-        set { field = value; InvalidateVisual(); }
-    }
-
-    public double Maximum
-    {
-        get;
-        set { field = value; InvalidateVisual(); }
-    }
-
     public double ViewportSize
     {
         get;
         set { field = value; InvalidateVisual(); }
     }
 
-    public double Value
-    {
-        get;
-        set
-        {
-            var clamped = Clamp(value);
-            if (field.Equals(clamped))
-                return;
-
-            field = clamped;
-            ValueChanged?.Invoke(field);
-            InvalidateVisual();
-        }
-    }
-
     public double SmallChange { get; set; } = 24;
 
     public double LargeChange { get; set; } = 120;
-
-    public Action<double>? ValueChanged { get; set; }
 
     public ScrollBar()
     {
@@ -194,13 +165,6 @@ public sealed class ScrollBar : Control
         double min = Math.Min(Minimum, Maximum);
         double max = Math.Max(Minimum, Maximum);
         return Math.Max(0, max - min);
-    }
-
-    private double Clamp(double value)
-    {
-        double min = Math.Min(Minimum, Maximum);
-        double max = Math.Max(Minimum, Maximum);
-        return Math.Clamp(value, min, max);
     }
 
     private Rect GetThumbRect(Rect track, Theme theme)
