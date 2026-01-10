@@ -365,11 +365,18 @@ internal sealed class X11WindowBackend : IWindowBackend
             // Text input after key handling (best-effort).
             if (!args.Handled)
             {
-                var buf = new byte[64];
-                NativeX11.XLookupString(ref e, buf, buf.Length, out _, out _);
+                Span<byte> buf = stackalloc byte[64];
+                unsafe
+                {
+                    fixed (byte* p = buf)
+                        NativeX11.XLookupString(ref e, p, buf.Length, out _, out _);
+                }
+
                 if (buf[0] != 0)
                 {
-                    string s = System.Text.Encoding.UTF8.GetString(buf).TrimEnd('\0');
+                    int len = buf.IndexOf((byte)0);
+                    if (len < 0) len = buf.Length;
+                    string s = System.Text.Encoding.UTF8.GetString(buf[..len]);
                     if (!string.IsNullOrEmpty(s))
                     {
                         // Filter control characters so Tab doesn't get inserted into TextBox.
