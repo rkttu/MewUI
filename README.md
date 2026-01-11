@@ -1,4 +1,6 @@
-![Aprillz.MewUI](https://raw.githubusercontent.com/aprillz/MewUI/main/assets/logo/logo-480.png)
+[![한국어](https://img.shields.io/badge/README.md-한국어-green.svg)](README.ko.md)
+
+![Aprillz.MewUI](https://raw.githubusercontent.com/aprillz/MewUI/main/assets/logo/logo_h-1280.png)
 
 
 ![.NET](https://img.shields.io/badge/.NET-8%2B-512BD4?logo=dotnet&logoColor=white)
@@ -34,7 +36,7 @@ curl -sL https://raw.githubusercontent.com/aprillz/MewUI/refs/heads/main/samples
 ```
 
 ### Video
-https://github.com/user-attachments/assets/05de4b40-6249-45b6-94b4-52ddfbb30a95
+https://github.com/user-attachments/assets/40f4da93-6176-4b2c-9799-09751ca27009
 
 ### Screenshots
 
