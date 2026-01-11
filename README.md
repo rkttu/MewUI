@@ -34,7 +34,7 @@ curl -sL https://raw.githubusercontent.com/aprillz/MewUI/refs/heads/main/samples
 ```
 
 ### Video
-https://github.com/user-attachments/assets/055ccfd2-509a-4705-970d-7676f9981ade
+https://github.com/user-attachments/assets/40f4da93-6176-4b2c-9799-09751ca27009
 
 ### Screenshots
 
