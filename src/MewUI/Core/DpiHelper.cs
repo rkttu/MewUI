@@ -12,9 +12,7 @@ public static class DpiHelper
     /// Call this at the start of the application.
     /// </summary>
     public static bool EnablePerMonitorDpiAwareness()
-        => Application.IsRunning
-            ? Application.Current.PlatformHost.EnablePerMonitorDpiAwareness()
-            : OperatingSystem.IsWindows(); // best-effort (caller should invoke after platform registration)
+        => Application.IsRunning && Application.Current.PlatformHost.EnablePerMonitorDpiAwareness();
 
     /// <summary>
     /// Gets the DPI for a specific window.

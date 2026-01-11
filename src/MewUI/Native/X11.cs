@@ -67,6 +67,39 @@ internal static partial class X11
     [LibraryImport(LibraryName)]
     public static partial int XClearArea(nint display, nint window, int x, int y, uint width, uint height, [MarshalAs(UnmanagedType.Bool)] bool exposures);
 
+    [LibraryImport(LibraryName)]
+    public static partial nint XGetSelectionOwner(nint display, nint selection);
+
+    [LibraryImport(LibraryName)]
+    public static partial int XGetWindowProperty(
+        nint display,
+        nint window,
+        nint property,
+        nint long_offset,
+        nint long_length,
+        [MarshalAs(UnmanagedType.Bool)] bool delete,
+        nint req_type,
+        out nint actual_type_return,
+        out int actual_format_return,
+        out nuint nitems_return,
+        out nuint bytes_after_return,
+        out nint prop_return);
+
+    [LibraryImport(LibraryName)]
+    public static partial void XrmInitialize();
+
+    [LibraryImport(LibraryName)]
+    public static partial nint XResourceManagerString(nint display);
+
+    [LibraryImport(LibraryName)]
+    public static partial nint XrmGetStringDatabase(nint data);
+
+    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int XrmGetResource(nint database, string name, string className, out nint type, out XrmValue value);
+
+    [LibraryImport(LibraryName)]
+    public static partial void XrmDestroyDatabase(nint database);
+
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
     public static partial nint XInternAtom(nint display, string atomName, [MarshalAs(UnmanagedType.Bool)] bool onlyIfExists);
 
@@ -84,6 +117,13 @@ internal static partial class X11
 
     [LibraryImport(LibraryName)]
     public static partial int XSetWMNormalHints(nint display, nint window, ref XSizeHints hints);
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct XrmValue
+{
+    public uint size;
+    public nint addr;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -209,6 +249,23 @@ internal struct XEvent
 
     [FieldOffset(0)]
     public XMotionEvent xmotion;
+
+    [FieldOffset(0)]
+    public XPropertyEvent xproperty;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct XPropertyEvent
+{
+    public int type;
+    public ulong serial;
+    [MarshalAs(UnmanagedType.Bool)]
+    public bool send_event;
+    public nint display;
+    public nint window;
+    public nint atom;
+    public ulong time;
+    public int state;
 }
 
 [StructLayout(LayoutKind.Sequential)]

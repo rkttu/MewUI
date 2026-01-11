@@ -17,7 +17,9 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     private bool _shown;
     private bool _disposed;
+    private bool _cleanupDone;
     private nint _wmDeleteWindowAtom;
+    private nint _wmProtocolsAtom;
     private bool _needsRender;
     private long _lastRenderTick;
     private UIElement? _mouseOverElement;
@@ -103,15 +105,19 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     private void CreateWindow()
     {
-        Display = NativeX11.XOpenDisplay(0);
+        Display = _host.Display;
         if (Display == 0)
-            throw new InvalidOperationException("XOpenDisplay failed.");
+            throw new InvalidOperationException("X11 display not initialized.");
 
         int screen = NativeX11.XDefaultScreen(Display);
         nint root = NativeX11.XRootWindow(Display, screen);
 
-        uint width = (uint)Math.Max(1, (int)Math.Round(Window.Width));
-        uint height = (uint)Math.Max(1, (int)Math.Round(Window.Height));
+        uint dpi = _host.GetDpiForWindow(0);
+        Window.SetDpi(dpi);
+        double dpiScale = Window.DpiScale;
+
+        uint width = (uint)Math.Max(1, (int)Math.Round(Window.Width * dpiScale));
+        uint height = (uint)Math.Max(1, (int)Math.Round(Window.Height * dpiScale));
 
         // Choose a GLX visual for OpenGL rendering and create the window with that visual.
         // This keeps it compatible with later Wayland/EGL abstraction (window owns the surface config).
@@ -208,19 +214,18 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         _host.RegisterWindow(Handle, this);
         Window.AttachBackend(this);
-        Window.SetDpi(96);
-        Window.SetClientSizeDip(width, height);
+        Window.SetClientSizeDip(width / dpiScale, height / dpiScale);
 
         SetTitle(Window.Title);
 
         // WM_DELETE_WINDOW
+        _wmProtocolsAtom = NativeX11.XInternAtom(Display, "WM_PROTOCOLS", false);
         _wmDeleteWindowAtom = NativeX11.XInternAtom(Display, "WM_DELETE_WINDOW", false);
-        if (_wmDeleteWindowAtom != 0)
+        if (_wmProtocolsAtom != 0 && _wmDeleteWindowAtom != 0)
             NativeX11.XSetWMProtocols(Display, Handle, ref _wmDeleteWindowAtom, 1);
 
         ApplyResizeMode();
 
-        Window.RaiseLoaded();
         _needsRender = true;
     }
 
@@ -233,8 +238,8 @@ internal sealed class X11WindowBackend : IWindowBackend
         if (!Window.WindowSize.IsResizable)
         {
             hints.flags = XSizeHintsFlags.PMinSize | XSizeHintsFlags.PMaxSize;
-            hints.min_width = (int)Math.Max(1, Math.Round(Window.Width));
-            hints.min_height = (int)Math.Max(1, Math.Round(Window.Height));
+            hints.min_width = (int)Math.Max(1, Math.Round(Window.Width * Window.DpiScale));
+            hints.min_height = (int)Math.Max(1, Math.Round(Window.Height * Window.DpiScale));
             hints.max_width = hints.min_width;
             hints.max_height = hints.min_height;
         }
@@ -280,7 +285,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
             case ConfigureNotify:
                 var cfg = ev.xconfigure;
-                Window.SetClientSizeDip(cfg.width, cfg.height);
+                Window.SetClientSizeDip(cfg.width / Window.DpiScale, cfg.height / Window.DpiScale);
                 _needsRender = true;
                 break;
 
@@ -288,10 +293,15 @@ internal sealed class X11WindowBackend : IWindowBackend
                 unsafe
                 {
                     var client = ev.xclient;
-                    if (_wmDeleteWindowAtom != 0 && client.data[0] == (long)_wmDeleteWindowAtom)
+                    if (_wmProtocolsAtom != 0 &&
+                        _wmDeleteWindowAtom != 0 &&
+                        client.message_type == _wmProtocolsAtom &&
+                        client.format == 32 &&
+                        (nint)client.data[0] == _wmDeleteWindowAtom)
                     {
-                        Window.RaiseClosed();
-                        Dispose();
+                        // Ask the window to close; it will destroy the X11 window.
+                        // Cleanup happens on DestroyNotify.
+                        Window.Close();
                     }
                 }
                 break;
@@ -299,7 +309,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             case DestroyNotify:
                 // Ensure we unregister and release resources even if the window is destroyed externally.
                 Window.RaiseClosed();
-                Dispose();
+                Cleanup(ev.xdestroywindow.window, destroyWindow: false);
                 break;
 
             case KeyPress:
@@ -345,6 +355,15 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         if (isDown)
         {
+            // Many window managers send WM_DELETE_WINDOW for Alt+F4, but not all do (especially for secondary windows).
+            // Handle it ourselves to ensure consistent close behavior.
+            const long XK_F4 = 0xFFC1;
+            if (ks == XK_F4 && args.Modifiers.HasFlag(ModifierKeys.Alt))
+            {
+                Window.Close();
+                return;
+            }
+
             Window.RaisePreviewKeyDown(args);
             if (!args.Handled)
             {
@@ -402,7 +421,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     private void HandleButton(XButtonEvent e, bool isDown)
     {
-        var pos = new Point(e.x, e.y);
+        var pos = new Point(e.x / Window.DpiScale, e.y / Window.DpiScale);
 
         if (isDown)
             Window.ClosePopupsIfClickOutside(pos);
@@ -459,7 +478,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     private void HandleMotion(XMotionEvent e)
     {
-        var pos = new Point(e.x, e.y);
+        var pos = new Point(e.x / Window.DpiScale, e.y / Window.DpiScale);
         var element = _capturedElement ?? Window.HitTest(pos);
 
         if (element != _mouseOverElement)
@@ -478,6 +497,20 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         var args = new MouseEventArgs(pos, pos, MouseButton.Left, leftButton: left, rightButton: right, middleButton: middle);
         element.RaiseMouseMove(args);
+    }
+
+    internal void NotifyDpiChanged(uint oldDpi, uint newDpi)
+    {
+        if (Display == 0 || Handle == 0 || oldDpi == newDpi)
+            return;
+
+        Window.SetDpi(newDpi);
+        Window.RaiseDpiChanged(oldDpi, newDpi);
+
+        if (NativeX11.XGetWindowAttributes(Display, Handle, out var attrs) != 0)
+            Window.SetClientSizeDip(attrs.width / Window.DpiScale, attrs.height / Window.DpiScale);
+
+        _needsRender = true;
     }
 
     private static Key MapKeysymToKey(long keysym)
@@ -541,18 +574,38 @@ internal sealed class X11WindowBackend : IWindowBackend
             _capturedElement = null;
         }
 
-        if (Handle != 0 && Display != 0)
-        {
-            if (Window.GraphicsFactory is Rendering.IWindowResourceReleaser releaser)
-                releaser.ReleaseWindowResources(Handle);
-
-            _host.UnregisterWindow(Handle);
-            Window.DisposeVisualTree();
-            OpenGLLinuxWindowInfoRegistry.Unregister(Handle);
-            NativeX11.XDestroyWindow(Display, Handle);
-            Handle = 0;
-        }
+        Cleanup(Handle, destroyWindow: true);
 
         // Display lifetime is managed by the platform host (shared across windows).
+    }
+
+    private void Cleanup(nint handle, bool destroyWindow)
+    {
+        if (_cleanupDone)
+            return;
+        _cleanupDone = true;
+
+        if (handle == 0 || Display == 0)
+            return;
+
+        if (destroyWindow)
+        {
+            try { NativeX11.XDestroyWindow(Display, handle); }
+            catch { }
+        }
+
+        try
+        {
+            if (Window.GraphicsFactory is Rendering.IWindowResourceReleaser releaser)
+                releaser.ReleaseWindowResources(handle);
+        }
+        catch { }
+
+        try { _host.UnregisterWindow(handle); } catch { }
+        try { Window.DisposeVisualTree(); } catch { }
+        try { OpenGLLinuxWindowInfoRegistry.Unregister(handle); } catch { }
+
+        if (Handle == handle)
+            Handle = 0;
     }
 }
