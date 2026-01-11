@@ -37,7 +37,7 @@ curl -sL https://raw.githubusercontent.com/aprillz/MewUI/refs/heads/main/samples
 
 
 ### 비디오
-https://github.com/user-attachments/assets/876c1450-de36-4ccf-9cf8-b47f035a300f
+https://github.com/user-attachments/assets/40f4da93-6176-4b2c-9799-09751ca27009
 
 ### 스크린샷
 
