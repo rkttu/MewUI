@@ -8,13 +8,17 @@ using Aprillz.MewUI.Markup;
 using Aprillz.MewUI.Panels;
 using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Resources;
 
 var stopwatch = Stopwatch.StartNew();
 
 Startup(Environment.GetCommandLineArgs(), out var isBench, out var isSmoke);
 
 double loadedMs = -1;
+double firstFrameMs = -1;
 var metricsText = new ObservableValue<string>("Metrics:");
+var metricsTimer = new DispatcherTimer(TimeSpan.FromSeconds(2));
+metricsTimer.Tick += (_, _) => UpdateMetrics(appendLog: false);
 
 Window window;
 Button enabledButton = null!;
@@ -22,21 +26,22 @@ var accentSwatches = new List<(Color color, Button button)>();
 var currentAccent = Theme.Current.Accent;
 
 var vm = new DemoViewModel();
+var logo = ImageSource.FromFile("logo-256.png");
 
 var root = new Window()
     .Ref(out window)
     .Title("Aprillz.MewUI Demo")
-    .Resizable(744, 740)
-    .Padding(10)
+    .Resizable(744, 884)
+    .Padding(16)
     .OnLoaded(() =>
     {
         loadedMs = stopwatch.Elapsed.TotalMilliseconds;
         UpdateAccentSwatches();
     })
+    .OnClosed(() => metricsTimer?.Dispose())
     .Content(
         new DockPanel()
             .LastChildFill()
-            .Margin(20)
             .Children(
                 HeaderSection().DockTop(),
 
@@ -47,7 +52,11 @@ var root = new Window()
                 NormalControls()
             )
     )
-    .OnFirstFrameRendered(ProcessMetric);
+    .OnFirstFrameRendered(() =>
+    {
+        ProcessMetric();
+        metricsTimer.Start();
+    });
 
 Application.Run(root);
 
@@ -124,6 +133,51 @@ Element NormalControls()
         .Height(120)
         .Placeholder("Type multi-line text (wheel scroll + thin scrollbar)")
         .Text("Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7");
+
+    var tabs = new TabControl()
+        .Height(160)
+        .TabItems(
+            new TabItem()
+                .Header(
+                    new StackPanel()
+                        .Horizontal()
+                        .Spacing(6)
+                        .Children(
+                            new Image()
+                                .Source(logo)
+                                .StretchMode(ImageStretch.Uniform)
+                                .Size(16, 16),
+
+                            new Label()
+                                .Text("Home")
+                        ))
+                .Content(
+                    new StackPanel()
+                        .Vertical()
+                        .Spacing(8)
+                        .Padding(4)
+                        .Children(
+                            new Label().Text("This is the Home tab (rich header: StackPanel + labels)."),
+                            new Button().Content("Action").Width(120)
+                        )),
+            new TabItem()
+                .Header("Settings")
+                .Content(
+                    new StackPanel()
+                        .Vertical()
+                        .Spacing(8)
+                        .Padding(4)
+                        .Children(
+                            new CheckBox().Text("Enable feature"),
+                            new Slider().Minimum(0).Maximum(100).Value(25)
+                        )),
+            new TabItem()
+                .Header("About")
+                .Content(
+                    new Label()
+                        .Text("TabControl is minimal + code-first (NativeAOT-friendly).")
+                        .Padding(4))
+        );
 
     return new StackPanel()
         .Children(
@@ -300,7 +354,10 @@ Element NormalControls()
                                 .Items("First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth", "Tenth")
                                 .SelectedIndex(1)
                         )
-                )
+                ),
+
+                tabs
+                    .Margin(0,12,0,0)
         );
 }
 
@@ -463,9 +520,13 @@ void ApplyAccent(Color accent)
     UpdateAccentSwatches();
 }
 
-void WriteMetric()
+void UpdateMetrics(bool appendLog, bool captureFirstFrame = false)
 {
-    var firstFrameMs = stopwatch.Elapsed.TotalMilliseconds;
+    if (captureFirstFrame && firstFrameMs < 0)
+    {
+        firstFrameMs = stopwatch.Elapsed.TotalMilliseconds;
+    }
+
     using var p = Process.GetCurrentProcess();
     p.Refresh();
 
@@ -473,19 +534,29 @@ void WriteMetric()
     double pmMb = p.PrivateMemorySize64 / (1024.0 * 1024.0);
 
     var loadedText = loadedMs >= 0 ? $"{loadedMs:0} ms" : "n/a";
-    metricsText.Value = $"Metrics ({Application.DefaultGraphicsBackend}): Loaded {loadedText}, FirstFrame {firstFrameMs:0} ms, WS {wsMb:0.0} MB, Private {pmMb:0.0} MB";
-    var path = Path.Combine(AppContext.BaseDirectory, "metrics.log");
-    File.AppendAllText(path, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {metricsText.Value}{Environment.NewLine}");
-    if (isBench)
-        Application.Quit();
+    var firstText = firstFrameMs >= 0 ? $"{firstFrameMs:0} ms" : "n/a";
+    metricsText.Value = $"Metrics ({Application.Current.GraphicsFactory.Backend}): Loaded {loadedText}, FirstFrame {firstText}, WS {wsMb:0.0} MB, Private {pmMb:0.0} MB";
+
+    if (appendLog)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "metrics.log");
+        File.AppendAllText(path, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {metricsText.Value}{Environment.NewLine}");
+    }
 }
 
 void ProcessMetric()
 {
-    WriteMetric();
+    UpdateMetrics(appendLog: true, captureFirstFrame: true);
+
+    if (isBench)
+    {
+        Application.Quit();
+    }
 
     if (!isSmoke)
+    {
         return;
+    }
 
     try
     {
