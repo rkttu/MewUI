@@ -62,6 +62,12 @@ public abstract class UIElement : Element
     public bool IsFocused { get; private set; }
 
     /// <summary>
+    /// Gets whether this element or any of its descendants has keyboard focus.
+    /// Useful for container visuals (e.g. TabControl outline) and WinForms-like focus navigation.
+    /// </summary>
+    public bool IsFocusWithin { get; private set; }
+
+    /// <summary>
     /// Gets whether the mouse is over this element.
     /// </summary>
     public bool IsMouseOver { get; private set; }
@@ -164,6 +170,11 @@ public abstract class UIElement : Element
         return false;
     }
 
+    /// <summary>
+    /// Allows focusable containers to redirect focus to a default descendant (WinForms-style).
+    /// </summary>
+    internal virtual UIElement GetDefaultFocusTarget() => this;
+
     internal void SetFocused(bool focused)
     {
         if (IsFocused != focused)
@@ -179,6 +190,15 @@ public abstract class UIElement : Element
                 OnLostFocus();
                 LostFocus?.Invoke();
             }
+            InvalidateVisual();
+        }
+    }
+
+    internal void SetFocusWithin(bool focusWithin)
+    {
+        if (IsFocusWithin != focusWithin)
+        {
+            IsFocusWithin = focusWithin;
             InvalidateVisual();
         }
     }
@@ -312,10 +332,7 @@ public abstract class UIElement : Element
 
     internal void SetIsVisibleBinding(Func<bool> get, Action<Action>? subscribe = null, Action<Action>? unsubscribe = null)
     {
-        if (get == null)
-        {
-            throw new ArgumentNullException(nameof(get));
-        }
+        ArgumentNullException.ThrowIfNull(get);
 
         _isVisibleBinding?.Dispose();
         _isVisibleBinding = new ValueBinding<bool>(
@@ -330,10 +347,7 @@ public abstract class UIElement : Element
 
     internal void SetIsEnabledBinding(Func<bool> get, Action<Action>? subscribe = null, Action<Action>? unsubscribe = null)
     {
-        if (get == null)
-        {
-            throw new ArgumentNullException(nameof(get));
-        }
+        ArgumentNullException.ThrowIfNull(get);
 
         _isEnabledBinding?.Dispose();
         _isEnabledBinding = new ValueBinding<bool>(

@@ -24,6 +24,8 @@ public sealed class FocusManager
     /// </summary>
     public bool SetFocus(UIElement? element)
     {
+        element = ResolveDefaultFocusTarget(element);
+
         if (FocusedElement == element)
         {
             return true;
@@ -37,6 +39,8 @@ public sealed class FocusManager
         var oldElement = FocusedElement;
         FocusedElement = element;
 
+        UpdateFocusWithin(oldElement, element);
+
         oldElement?.SetFocused(false);
         element?.SetFocused(true);
 
@@ -44,6 +48,72 @@ public sealed class FocusManager
 
         return true;
     }
+
+    private static UIElement? ResolveDefaultFocusTarget(UIElement? element)
+    {
+        for (int i = 0; i < 8 && element != null; i++)
+        {
+            var target = element.GetDefaultFocusTarget();
+            if (target == element)
+            {
+                break;
+            }
+
+            element = target;
+        }
+
+        return element;
+    }
+
+    internal static UIElement? FindFirstFocusable(Element? root)
+    {
+        if (root == null)
+        {
+            return null;
+        }
+
+        if (root is Controls.TabControl tabControl)
+        {
+            var fromContent = FindFirstFocusable(tabControl.SelectedTab?.Content);
+            if (fromContent != null)
+            {
+                return fromContent;
+            }
+
+            if (IsFocusable(tabControl))
+            {
+                return tabControl;
+            }
+
+            return null;
+        }
+
+        if (root is UIElement uiElement && IsFocusable(uiElement))
+        {
+            return uiElement;
+        }
+
+        if (root is Panels.Panel panel)
+        {
+            foreach (var child in panel.Children)
+            {
+                var hit = FindFirstFocusable(child);
+                if (hit != null)
+                {
+                    return hit;
+                }
+            }
+        }
+        else if (root is Controls.ContentControl contentControl && contentControl.Content != null)
+        {
+            return FindFirstFocusable(contentControl.Content);
+        }
+
+        return null;
+    }
+
+    private static bool IsFocusable(UIElement element) =>
+        element.Focusable && element.IsEffectivelyEnabled && element.IsVisible;
 
     /// <summary>
     /// Clears focus from the current element.
@@ -91,14 +161,67 @@ public sealed class FocusManager
         return result;
     }
 
+    private static void UpdateFocusWithin(UIElement? oldElement, UIElement? newElement)
+    {
+        if (oldElement == newElement)
+        {
+            return;
+        }
+
+        var oldChain = CollectFocusWithinChain(oldElement);
+        var newChain = CollectFocusWithinChain(newElement);
+        var newSet = new HashSet<UIElement>(newChain);
+
+        for (int i = 0; i < oldChain.Count; i++)
+        {
+            var e = oldChain[i];
+            if (!newSet.Contains(e))
+            {
+                e.SetFocusWithin(false);
+            }
+        }
+
+        for (int i = 0; i < newChain.Count; i++)
+        {
+            newChain[i].SetFocusWithin(true);
+        }
+    }
+
+    private static List<UIElement> CollectFocusWithinChain(UIElement? element)
+    {
+        var chain = new List<UIElement>();
+        Element? current = element;
+        while (current != null)
+        {
+            if (current is UIElement ui)
+            {
+                chain.Add(ui);
+            }
+            current = current.Parent;
+        }
+        return chain;
+    }
+
     private void CollectFocusableElementsCore(Element? element, List<UIElement> result)
     {
+        if (element is Controls.TabControl tabControl)
+        {
+            int before = result.Count;
+            CollectFocusableElementsCore(tabControl.SelectedTab?.Content, result);
+
+            // WinForms-style: Tab navigation enters the selected tab page's content.
+            // If there are no focusable descendants, allow the TabControl itself to be focused.
+            if (result.Count == before)
+            {
+                AddIfFocusable(tabControl, result);
+            }
+
+            return;
+        }
+
         if (element is UIElement uiElement)
         {
-            if (uiElement.Focusable && uiElement.IsEffectivelyEnabled && uiElement.IsVisible)
-            {
-                result.Add(uiElement);
-            }
+            AddIfFocusable(uiElement, result);
         }
 
         if (element is Panels.Panel panel)
@@ -111,6 +234,14 @@ public sealed class FocusManager
         else if (element is Controls.ContentControl contentControl && contentControl.Content != null)
         {
             CollectFocusableElementsCore(contentControl.Content, result);
+        }
+    }
+
+    private static void AddIfFocusable(UIElement uiElement, List<UIElement> result)
+    {
+        if (uiElement.Focusable && uiElement.IsEffectivelyEnabled && uiElement.IsVisible)
+        {
+            result.Add(uiElement);
         }
     }
 }
